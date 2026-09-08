@@ -11233,6 +11233,20 @@ static void ca0132_config(struct hda_codec *codec)
 		break;
 	}
 
+	/* AE-9: the headphone output is the ACM, permanently attached, so the
+	 * headphone pin must not do jack detection. With presence detect the
+	 * pin sense reads "unplugged", the desktop's card profiles mark the
+	 * headphone route unavailable, the analog profile with it, and refuse the
+	 * sink as a default (2026-09-08). NO_PRESENCE makes ALSA expose a phantom
+	 * jack that always reads plugged; the analog profile is then selected by
+	 * priority and needs no pinning. */
+	if (ca0132_quirk(spec) == QUIRK_AE9 && spec->unsol_tag_hp) {
+		unsigned int cfg = snd_hda_codec_get_pincfg(codec, spec->unsol_tag_hp);
+
+		snd_hda_codec_set_pincfg(codec, spec->unsol_tag_hp,
+					 cfg | (AC_DEFCFG_MISC_NO_PRESENCE << AC_DEFCFG_MISC_SHIFT));
+	}
+
 	/* Default HP/Speaker auto-detect from headphone pin verb: enable if the
 	 * pin config indicates presence detect (not AC_DEFCFG_MISC_NO_PRESENCE).
 	 */

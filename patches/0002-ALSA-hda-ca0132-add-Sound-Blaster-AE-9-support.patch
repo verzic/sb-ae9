@@ -2049,7 +2049,28 @@
  	case QUIRK_AE7:
  		spec->num_outputs = 2;
  		spec->out_pins[0] = 0x0B; /* Line out */
-@@ -9889,6 +11305,19 @@
+@@ -9817,6 +11233,20 @@
+ 		break;
+ 	}
+ 
++	/* AE-9: the headphone output is the ACM, permanently attached, so the
++	 * headphone pin must not do jack detection. With presence detect the
++	 * pin sense reads "unplugged", the desktop's card profiles mark the
++	 * headphone route unavailable, the analog profile with it, and refuse the
++	 * sink as a default (2026-09-08). NO_PRESENCE makes ALSA expose a phantom
++	 * jack that always reads plugged; the analog profile is then selected by
++	 * priority and needs no pinning. */
++	if (ca0132_quirk(spec) == QUIRK_AE9 && spec->unsol_tag_hp) {
++		unsigned int cfg = snd_hda_codec_get_pincfg(codec, spec->unsol_tag_hp);
++
++		snd_hda_codec_set_pincfg(codec, spec->unsol_tag_hp,
++					 cfg | (AC_DEFCFG_MISC_NO_PRESENCE << AC_DEFCFG_MISC_SHIFT));
++	}
++
+ 	/* Default HP/Speaker auto-detect from headphone pin verb: enable if the
+ 	 * pin config indicates presence detect (not AC_DEFCFG_MISC_NO_PRESENCE).
+ 	 */
+@@ -9889,6 +11319,19 @@
  	}
  }
  
@@ -2069,7 +2090,7 @@
  static void ca0132_codec_remove(struct hda_codec *codec)
  {
  	struct ca0132_spec *spec = codec->spec;
-@@ -9917,6 +11346,18 @@
+@@ -9917,6 +11360,18 @@
  	snd_hda_pick_fixup(codec, ca0132_quirk_models, ca0132_quirks, NULL);
  	if (ca0132_quirk(spec) == QUIRK_SBZ)
  		sbz_detect_quirk(codec);
@@ -2088,7 +2109,7 @@
  
  	codec->pcm_format_first = 1;
  	codec->no_sticky_stream = 1;
-@@ -9949,6 +11390,10 @@
+@@ -9949,6 +11404,10 @@
  		spec->mixers[0] = desktop_mixer;
  		snd_hda_codec_set_name(codec, "Sound BlasterX AE-5");
  		break;
@@ -2099,7 +2120,7 @@
  	case QUIRK_AE7:
  		spec->mixers[0] = desktop_mixer;
  		snd_hda_codec_set_name(codec, "Sound Blaster AE-7");
-@@ -9963,6 +11408,7 @@
+@@ -9963,6 +11422,7 @@
  	case QUIRK_SBZ:
  	case QUIRK_R3D:
  	case QUIRK_AE5:
@@ -2107,7 +2128,7 @@
  	case QUIRK_AE7:
  	case QUIRK_ZXR:
  		spec->use_alt_controls = true;
-@@ -9995,6 +11441,8 @@
+@@ -9995,6 +11455,8 @@
  	spec->base_exit_verbs = ca0132_base_exit_verbs;
  
  	INIT_DELAYED_WORK(&spec->unsol_hp_work, ca0132_unsol_hp_delayed);
@@ -2116,7 +2137,7 @@
  
  	ca0132_init_chip(codec);
  
-@@ -10052,6 +11500,9 @@
+@@ -10052,6 +11514,9 @@
  	struct ca0132_spec *spec = codec->spec;
  
  	cancel_delayed_work_sync(&spec->unsol_hp_work);
