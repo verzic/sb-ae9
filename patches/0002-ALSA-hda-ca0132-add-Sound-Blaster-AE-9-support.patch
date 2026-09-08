@@ -740,7 +740,7 @@
  
  	ca0113_mmio_command_set(codec, 0x30, 0x2b, 0x3f);
  	ca0113_mmio_command_set(codec, 0x30, 0x2d, 0x3f);
-@@ -8354,6 +8688,1047 @@
+@@ -8354,6 +8688,1112 @@
  /*
   * Setup default parameters for the Sound Blaster AE-7 DSP.
   */
@@ -1389,13 +1389,33 @@
 +
 +/* Windows shows the level in dB (-90.0 .. 0.0), i.e. the Windows table value
 + * for the current step, not the 0..99 index. */
++static bool ae9_master_muted(struct hda_codec *codec)
++{
++	struct snd_kcontrol *kctl = snd_hda_find_mixer_ctl(codec, "Master Playback Switch");
++	struct snd_ctl_elem_value *uctl;
++	bool muted = false;
++
++	if (!kctl || !kctl->get)
++		return false;
++	uctl = kzalloc(sizeof(*uctl), GFP_KERNEL);
++	if (!uctl)
++		return false;
++	if (kctl->get(kctl, uctl) >= 0)
++		muted = !uctl->value.integer.value[0];
++	kfree(uctl);
++	return muted;
++}
++
 +static void ae9_acm_show_volume(struct ca0132_spec *spec)
 +{
 +	long lvl = clamp(ae9_master_level(spec->codec, NULL), 0L, 99L);
 +	int db100 = -ae9_win_vol_db100[lvl * 100 / 99];	/* positive magnitude */
 +	char txt[9];
 +
-+	snprintf(txt, sizeof(txt), "%s%d.%d", db100 ? "-" : "", db100 / 100, (db100 % 100) / 10);
++	if (ae9_master_muted(spec->codec))
++		snprintf(txt, sizeof(txt), "MUTE");
++	else
++		snprintf(txt, sizeof(txt), "%s%d.%d", db100 ? "-" : "", db100 / 100, (db100 % 100) / 10);
 +	ae9_acm_display(spec, txt);
 +}
 +
@@ -1454,6 +1474,50 @@
 +	kctl = snd_hda_find_mixer_ctl(codec, "Enable OutFX Playback Switch");
 +	if (kctl)
 +		snd_ctl_notify(codec->card, SNDRV_CTL_EVENT_MASK_VALUE, &kctl->id);
++}
++
++/* Toggle a boolean/enum mixer control from the service and notify listeners. */
++static void ae9_toggle_ctl(struct hda_codec *codec, const char *name, bool is_enum)
++{
++	struct snd_kcontrol *kctl = snd_hda_find_mixer_ctl(codec, name);
++	struct snd_ctl_elem_value *uctl;
++
++	if (!kctl || !kctl->get || !kctl->put)
++		return;
++	uctl = kzalloc(sizeof(*uctl), GFP_KERNEL);
++	if (!uctl)
++		return;
++	if (kctl->get(kctl, uctl) >= 0) {
++		if (is_enum)
++			uctl->value.enumerated.item[0] = !uctl->value.enumerated.item[0];
++		else
++			uctl->value.integer.value[0] = !uctl->value.integer.value[0];
++		kctl->put(kctl, uctl);
++		snd_ctl_notify(codec->card, SNDRV_CTL_EVENT_MASK_VALUE, &kctl->id);
++	}
++	kfree(uctl);
++}
++
++/* The knob is button 2 (Windows 0x3f6b0): short press = mute, press held
++ * between AcmEncoderMidPressMs (1500) and LongPressMs (3000) = output toggle,
++ * longer = encoder LED (not implemented). */
++static void ae9_acm_service_knob_press(struct hda_codec *codec)
++{
++	struct ca0132_spec *spec = codec->spec;
++	int ms = ae9_acm_button(spec, 2);
++
++	if (!ms)
++		return;
++	if (ms < 1500) {
++		ae9_toggle_ctl(codec, "Master Playback Switch", false);
++		codec_info(codec, "AE-9 ACM: knob press (%d ms) -> mute toggle\n", ms);
++		spec->ae9_acm_disp_dirty = true;
++	} else if (ms < 3000) {
++		ae9_toggle_ctl(codec, "AE-9 Output", true);	/* select_out flags pending_mode */
++		codec_info(codec, "AE-9 ACM: knob mid press (%d ms) -> output toggle\n", ms);
++	} else {
++		codec_info(codec, "AE-9 ACM: knob long press (%d ms), ignored\n", ms);
++	}
 +}
 +
 +/* Windows writes exactly one ACM register bit for the output: reg2 bit6 (the
@@ -1685,6 +1749,7 @@
 +	}
 +	ae9_acm_knob(codec);
 +	ae9_acm_service_buttons(codec);
++	ae9_acm_service_knob_press(codec);
 +	if (spec->ae9_acm_pending_fx) {
 +		spec->ae9_acm_pending_fx = false;
 +		ae9_acm_set_fx_light(spec, ae9_fx_enabled(spec));
@@ -1788,7 +1853,7 @@
  static void ae7_setup_defaults(struct hda_codec *codec)
  {
  	struct ca0132_spec *spec = codec->spec;
-@@ -8515,6 +9890,7 @@
+@@ -8515,6 +9955,7 @@
  	case QUIRK_SBZ:
  	case QUIRK_R3D:
  	case QUIRK_AE5:
@@ -1796,7 +1861,7 @@
  		if (request_firmware(&fw_entry, DESKTOP_EFX_FILE,
  					codec->card->dev) != 0)
  			codec_dbg(codec, "Desktop firmware not found.");
-@@ -8718,6 +10094,7 @@
+@@ -8718,6 +10159,7 @@
  	unsigned int on;
  
  	mutex_init(&spec->chipio_mutex);
@@ -1804,7 +1869,7 @@
  
  	/*
  	 * The Windows driver always does this upon startup, which seems to
-@@ -8777,6 +10154,12 @@
+@@ -8777,6 +10219,12 @@
  	spec->voicefx_val = 0;
  	spec->effects_switch[PLAY_ENHANCEMENT - EFFECT_START_NID] = 1;
  	spec->effects_switch[CRYSTAL_VOICE - EFFECT_START_NID] = 0;
@@ -1817,7 +1882,7 @@
  
  	/*
  	 * The ZxR doesn't have a front panel header, and it's line-in is on
-@@ -8809,9 +10192,9 @@
+@@ -8809,9 +10257,9 @@
  	unsigned int i;
  
  	for (i = 0; i < 4; i++)
@@ -1829,7 +1894,7 @@
  
  	ca0113_mmio_gpio_set(codec, 0, false);
  	ca0113_mmio_gpio_set(codec, 1, false);
-@@ -9093,8 +10476,8 @@
+@@ -9093,8 +10541,8 @@
  {
  	struct ca0132_spec *spec = codec->spec;
  
@@ -1840,7 +1905,7 @@
  
  	chipio_write(codec, 0x18b0a4, 0x000000c2);
  
-@@ -9210,7 +10593,7 @@
+@@ -9210,7 +10658,7 @@
  
  	addr = ca0113_mmio_init_address_sbz;
  	for (i = 0; i < 3; i++)
@@ -1849,7 +1914,7 @@
  
  	cur_addr = i;
  	switch (ca0132_quirk(spec)) {
-@@ -9233,7 +10616,7 @@
+@@ -9233,7 +10681,7 @@
  	}
  
  	for (i = 0; i < 2; i++)
@@ -1858,7 +1923,7 @@
  
  	cur_addr += i;
  
-@@ -9249,39 +10632,50 @@
+@@ -9249,39 +10697,50 @@
  	}
  
  	for (i = 0; i < count; i++)
@@ -1919,7 +1984,7 @@
  }
  
  static void ca0132_mmio_init(struct hda_codec *codec)
-@@ -9295,6 +10689,7 @@
+@@ -9295,6 +10754,7 @@
  		ca0132_mmio_init_sbz(codec);
  		break;
  	case QUIRK_AE5:
@@ -1927,7 +1992,7 @@
  		ca0132_mmio_init_ae5(codec);
  		break;
  	default:
-@@ -9343,19 +10738,19 @@
+@@ -9343,19 +10803,19 @@
  	}
  
  	for (i = cur_addr = 0; i < 3; i++, cur_addr++)
@@ -1951,7 +2016,7 @@
  
  	if (ca0132_quirk(spec) == QUIRK_AE7) {
  		ca0113_mmio_command_set_type2(codec, 0x48, 0x07, 0x83);
-@@ -9367,7 +10762,7 @@
+@@ -9367,7 +10827,7 @@
  	chipio_8051_write_direct(codec, 0x90, 0x00);
  	chipio_8051_write_direct(codec, 0x90, 0x10);
  
@@ -1960,7 +2025,7 @@
  		ca0113_mmio_command_set(codec, 0x48, 0x07, 0x83);
  }
  
-@@ -9376,9 +10771,53 @@
+@@ -9376,9 +10836,53 @@
   * here so they don't clutter up the main ca0132_init function
   * anymore than they have to.
   */
@@ -2014,7 +2079,7 @@
  
  	ca0132_alt_vol_setup(codec);
  
-@@ -9412,6 +10851,28 @@
+@@ -9412,6 +10916,28 @@
  		snd_hda_sequence_write(codec, spec->desktop_init_verbs);
  		ca0113_mmio_command_set(codec, 0x30, 0x32, 0x3f);
  		break;
@@ -2043,7 +2108,7 @@
  	case QUIRK_AE7:
  		ca0132_gpio_init(codec);
  		chipio_8051_write_pll_pmu(codec, 0x49, 0x88);
-@@ -9458,6 +10919,9 @@
+@@ -9458,6 +10984,9 @@
  		} else {
  			if (ca0132_quirk(spec) == QUIRK_SBZ)
  				sbz_dsp_startup_check(codec);
@@ -2053,7 +2118,7 @@
  			return 0;
  		}
  	}
-@@ -9471,7 +10935,7 @@
+@@ -9471,7 +11000,7 @@
  
  	CLASS(snd_hda_power_pm, pm)(codec);
  
@@ -2062,7 +2127,7 @@
  		ae5_register_set(codec);
  
  	ca0132_init_params(codec);
-@@ -9498,6 +10962,9 @@
+@@ -9498,6 +11027,9 @@
  	case QUIRK_AE5:
  		ae5_setup_defaults(codec);
  		break;
@@ -2072,7 +2137,7 @@
  	case QUIRK_AE7:
  		ae7_setup_defaults(codec);
  		break;
-@@ -9572,6 +11039,8 @@
+@@ -9572,6 +11104,8 @@
  	struct ca0132_spec *spec = codec->spec;
  
  	cancel_delayed_work_sync(&spec->unsol_hp_work);
@@ -2081,7 +2146,7 @@
  	snd_hda_power_up(codec);
  	switch (ca0132_quirk(spec)) {
  	case QUIRK_SBZ:
-@@ -9584,6 +11053,7 @@
+@@ -9584,6 +11118,7 @@
  		r3d_exit_chip(codec);
  		break;
  	case QUIRK_AE5:
@@ -2089,7 +2154,7 @@
  		ae5_exit_chip(codec);
  		break;
  	case QUIRK_AE7:
-@@ -9600,6 +11070,8 @@
+@@ -9600,6 +11135,8 @@
  	ca0132_exit_chip(codec);
  
  	snd_hda_power_down(codec);
@@ -2098,7 +2163,7 @@
  #ifdef CONFIG_PCI
  	if (spec->mem_base)
  		pci_iounmap(codec->bus->pci, spec->mem_base);
-@@ -9659,6 +11131,10 @@
+@@ -9659,6 +11196,10 @@
  		codec_dbg(codec, "%s: QUIRK_AE5 applied.\n", __func__);
  		snd_hda_apply_pincfgs(codec, ae5_pincfgs);
  		break;
@@ -2109,7 +2174,7 @@
  	case QUIRK_AE7:
  		codec_dbg(codec, "%s: QUIRK_AE7 applied.\n", __func__);
  		snd_hda_apply_pincfgs(codec, ae7_pincfgs);
-@@ -9744,6 +11220,7 @@
+@@ -9744,6 +11285,7 @@
  		spec->dig_in = 0x09;
  		break;
  	case QUIRK_AE5:
@@ -2117,7 +2182,7 @@
  	case QUIRK_AE7:
  		spec->num_outputs = 2;
  		spec->out_pins[0] = 0x0B; /* Line out */
-@@ -9817,6 +11294,20 @@
+@@ -9817,6 +11359,20 @@
  		break;
  	}
  
@@ -2138,7 +2203,7 @@
  	/* Default HP/Speaker auto-detect from headphone pin verb: enable if the
  	 * pin config indicates presence detect (not AC_DEFCFG_MISC_NO_PRESENCE).
  	 */
-@@ -9889,6 +11380,19 @@
+@@ -9889,6 +11445,19 @@
  	}
  }
  
@@ -2158,7 +2223,7 @@
  static void ca0132_codec_remove(struct hda_codec *codec)
  {
  	struct ca0132_spec *spec = codec->spec;
-@@ -9917,6 +11421,18 @@
+@@ -9917,6 +11486,18 @@
  	snd_hda_pick_fixup(codec, ca0132_quirk_models, ca0132_quirks, NULL);
  	if (ca0132_quirk(spec) == QUIRK_SBZ)
  		sbz_detect_quirk(codec);
@@ -2177,7 +2242,7 @@
  
  	codec->pcm_format_first = 1;
  	codec->no_sticky_stream = 1;
-@@ -9949,6 +11465,10 @@
+@@ -9949,6 +11530,10 @@
  		spec->mixers[0] = desktop_mixer;
  		snd_hda_codec_set_name(codec, "Sound BlasterX AE-5");
  		break;
@@ -2188,7 +2253,7 @@
  	case QUIRK_AE7:
  		spec->mixers[0] = desktop_mixer;
  		snd_hda_codec_set_name(codec, "Sound Blaster AE-7");
-@@ -9963,6 +11483,7 @@
+@@ -9963,6 +11548,7 @@
  	case QUIRK_SBZ:
  	case QUIRK_R3D:
  	case QUIRK_AE5:
@@ -2196,7 +2261,7 @@
  	case QUIRK_AE7:
  	case QUIRK_ZXR:
  		spec->use_alt_controls = true;
-@@ -9995,6 +11516,8 @@
+@@ -9995,6 +11581,8 @@
  	spec->base_exit_verbs = ca0132_base_exit_verbs;
  
  	INIT_DELAYED_WORK(&spec->unsol_hp_work, ca0132_unsol_hp_delayed);
@@ -2205,7 +2270,7 @@
  
  	ca0132_init_chip(codec);
  
-@@ -10052,6 +11575,9 @@
+@@ -10052,6 +11640,9 @@
  	struct ca0132_spec *spec = codec->spec;
  
  	cancel_delayed_work_sync(&spec->unsol_hp_work);

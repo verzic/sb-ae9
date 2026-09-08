@@ -9333,13 +9333,33 @@ static long ae9_master_level(struct hda_codec *codec, struct snd_kcontrol **kctl
 
 /* Windows shows the level in dB (-90.0 .. 0.0), i.e. the Windows table value
  * for the current step, not the 0..99 index. */
+static bool ae9_master_muted(struct hda_codec *codec)
+{
+	struct snd_kcontrol *kctl = snd_hda_find_mixer_ctl(codec, "Master Playback Switch");
+	struct snd_ctl_elem_value *uctl;
+	bool muted = false;
+
+	if (!kctl || !kctl->get)
+		return false;
+	uctl = kzalloc(sizeof(*uctl), GFP_KERNEL);
+	if (!uctl)
+		return false;
+	if (kctl->get(kctl, uctl) >= 0)
+		muted = !uctl->value.integer.value[0];
+	kfree(uctl);
+	return muted;
+}
+
 static void ae9_acm_show_volume(struct ca0132_spec *spec)
 {
 	long lvl = clamp(ae9_master_level(spec->codec, NULL), 0L, 99L);
 	int db100 = -ae9_win_vol_db100[lvl * 100 / 99];	/* positive magnitude */
 	char txt[9];
 
-	snprintf(txt, sizeof(txt), "%s%d.%d", db100 ? "-" : "", db100 / 100, (db100 % 100) / 10);
+	if (ae9_master_muted(spec->codec))
+		snprintf(txt, sizeof(txt), "MUTE");
+	else
+		snprintf(txt, sizeof(txt), "%s%d.%d", db100 ? "-" : "", db100 / 100, (db100 % 100) / 10);
 	ae9_acm_display(spec, txt);
 }
 
@@ -9398,6 +9418,50 @@ static void ae9_acm_service_buttons(struct hda_codec *codec)
 	kctl = snd_hda_find_mixer_ctl(codec, "Enable OutFX Playback Switch");
 	if (kctl)
 		snd_ctl_notify(codec->card, SNDRV_CTL_EVENT_MASK_VALUE, &kctl->id);
+}
+
+/* Toggle a boolean/enum mixer control from the service and notify listeners. */
+static void ae9_toggle_ctl(struct hda_codec *codec, const char *name, bool is_enum)
+{
+	struct snd_kcontrol *kctl = snd_hda_find_mixer_ctl(codec, name);
+	struct snd_ctl_elem_value *uctl;
+
+	if (!kctl || !kctl->get || !kctl->put)
+		return;
+	uctl = kzalloc(sizeof(*uctl), GFP_KERNEL);
+	if (!uctl)
+		return;
+	if (kctl->get(kctl, uctl) >= 0) {
+		if (is_enum)
+			uctl->value.enumerated.item[0] = !uctl->value.enumerated.item[0];
+		else
+			uctl->value.integer.value[0] = !uctl->value.integer.value[0];
+		kctl->put(kctl, uctl);
+		snd_ctl_notify(codec->card, SNDRV_CTL_EVENT_MASK_VALUE, &kctl->id);
+	}
+	kfree(uctl);
+}
+
+/* The knob is button 2 (Windows 0x3f6b0): short press = mute, press held
+ * between AcmEncoderMidPressMs (1500) and LongPressMs (3000) = output toggle,
+ * longer = encoder LED (not implemented). */
+static void ae9_acm_service_knob_press(struct hda_codec *codec)
+{
+	struct ca0132_spec *spec = codec->spec;
+	int ms = ae9_acm_button(spec, 2);
+
+	if (!ms)
+		return;
+	if (ms < 1500) {
+		ae9_toggle_ctl(codec, "Master Playback Switch", false);
+		codec_info(codec, "AE-9 ACM: knob press (%d ms) -> mute toggle\n", ms);
+		spec->ae9_acm_disp_dirty = true;
+	} else if (ms < 3000) {
+		ae9_toggle_ctl(codec, "AE-9 Output", true);	/* select_out flags pending_mode */
+		codec_info(codec, "AE-9 ACM: knob mid press (%d ms) -> output toggle\n", ms);
+	} else {
+		codec_info(codec, "AE-9 ACM: knob long press (%d ms), ignored\n", ms);
+	}
 }
 
 /* Windows writes exactly one ACM register bit for the output: reg2 bit6 (the
@@ -9629,6 +9693,7 @@ static void ae9_acm_work_fn(struct work_struct *work)
 	}
 	ae9_acm_knob(codec);
 	ae9_acm_service_buttons(codec);
+	ae9_acm_service_knob_press(codec);
 	if (spec->ae9_acm_pending_fx) {
 		spec->ae9_acm_pending_fx = false;
 		ae9_acm_set_fx_light(spec, ae9_fx_enabled(spec));
