@@ -5,9 +5,10 @@ dual CA0132 codecs, ES9038Q2M headphone DAC, SABRE9006 line-out DAC, external
 Audio Control Module). Based on the kernel's `snd-hda-codec-ca0132`, plus a small fix to
 the HDA core that stops the card from hard-locking the machine.
 
-**Status: working, one machine, days not months.** Headphone output through the ACM,
-ACM volume knob and dB display, mute-free playback under PipeWire. Read *Known issues*
-before installing. This is not (yet) upstream; the plan is to get it there.
+**Status: working.** Built and running on Linux 7.0 (Ubuntu kernel 7.0.0-31-generic) with
+the physical card and ACM: headphone output through the ACM, volume knob and dB display,
+playback under PipeWire, no issues so far. Read *Known issues* before installing. This is
+not (yet) upstream; the plan is to get it there.
 
 ## What works
 - Analog headphone output through the ACM (ES9038Q2M path), 48 kHz.
@@ -55,9 +56,11 @@ The DSP needs a 432-byte program patch that only exists inside Creative's `CtxHd
 It is Creative's code and is **not** in this repository. `tools/ae9-firmware-extract.sh`
 carves it from the driver package you are licensed to use (the `b43-fwcutter` model):
 
-1. Download **Sound Blaster Command** for the AE-9 from
-   <https://support.creative.com> (product: Sound Blaster AE-9; file
-   `AECMDMasterInstaller_3.4.92.00.exe`, ~138 MB). The page has a licence click and a
+1. Download **Sound Blaster Command** for the AE-9 (file `AECMDMasterInstaller_3.4.92.00.exe`,
+   ~138 MB) from Creative's download page:
+   <https://support.creative.com/downloads/download.aspx?nDownloadId=100330>.
+   If that link is broken, find it here: <https://support.creative.com/Downloads/searchdownloads.aspx?filename=SB#>
+   (search "AE-9", package "Sound Blaster Command"). The page has a licence click and a
    captcha, so this step is manual. No VM, nothing is executed.
 2. `sudo ./install.sh --exe ~/Downloads/AECMDMasterInstaller_3.4.92.00.exe`
    (or run `tools/ae9-firmware-extract.sh` yourself). It unpacks two Inno Setup layers
