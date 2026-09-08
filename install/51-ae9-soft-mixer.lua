@@ -15,5 +15,6 @@ table.insert(alsa_monitor.rules, {
   apply_properties = {
     ["api.alsa.soft-mixer"] = true,
     ["api.acp.auto-port"] = false,
+    ["api.acp.auto-profile"] = false,   -- analog profiles read "unavailable" (jack-only ports); ae9-defaults selects it
   },
 })

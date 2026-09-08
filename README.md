@@ -91,7 +91,8 @@ support the AE-9).
   name onto sink ports and rewrite it on every route restore, flipping the ACM relay.
 - Effects: `amixer -c<N> sset 'Enable OutFX' on|off` plus the `FX:` switches.
 - ACM service off (diagnostic): `ae9_acm_poll=0` in `/etc/modprobe.d/sb-ae9.conf`.
-- Session defaults: `systemctl --user restart ae9-defaults` re-applies routing, level and default sink.
+- Session defaults: `systemctl --user restart --no-block ae9-defaults` re-applies the analog profile,
+  routing, level and default sink (the service takes up to ~45 s; `--no-block` returns at once).
 
 ## Repository layout
 - `driver/ca0132/` — the codec driver (kernel `sound/hda/codecs/ca0132.c` + AE-9 support).
