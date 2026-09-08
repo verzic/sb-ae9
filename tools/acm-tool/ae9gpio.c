@@ -23,7 +23,7 @@ static int uart = -1;
 module_param(uart, int, 0444);
 static int acm;
 module_param(acm, int, 0444);
-MODULE_PARM_DESC(acm, "1 = power the ACM (GPIO5) + Windows GPIO sequence + UART 115200 + probe F0 81 00 F7; 2 = also unlock + LED on + display 'AE-9'");
+MODULE_PARM_DESC(acm, "1 = power the ACM (GPIO5) + Windows GPIO sequence + UART 115200 + probe F0 81 00 F7; 2 = also unlock + LED on + display 'AE-9'; 3 = UART only, no GPIO (safe on a live card; use with the driver's ACM service parked)");
 
 static char *acmset;
 module_param(acmset, charp, 0444);
@@ -37,6 +37,9 @@ MODULE_PARM_DESC(acmtext, "ACM display text (up to 8 chars): F0 11 09 <text> 00 
 
 static int mcr = -1;
 module_param(mcr, int, 0444);
+static char *raw;
+module_param(raw, charp, 0444);
+MODULE_PARM_DESC(raw, "send one sysex frame to the ACM and print the reply: comma-separated hex bytes, e.g. raw=f0,22,02,01,00,f7 (use with acm=3)");
 static int i2cdump = -1;
 module_param(i2cdump, int, 0444);
 MODULE_PARM_DESC(i2cdump, "command-engine I2C group to dump (0x48=ES9038 HP DAC, 0x49=SABRE9006 line DAC): regs 0x40-0x43 then 0x00-0x15");
@@ -284,6 +287,20 @@ static int __init ae9gpio_init(void)
 		acm_cmd(b2, cmd, sizeof(cmd), "display");
 	}
 
+	if (raw && *raw) {
+		u8 f[32]; int n = 0; char *lst = raw, *tok;
+		u8 rx[32]; int got;
+
+		while ((tok = strsep(&lst, ",")) != NULL && n < 32) {
+			unsigned int b;
+			if (*tok && sscanf(tok, "%x", &b) == 1) f[n++] = b;
+		}
+		if (n) {
+			acm_tx(b2, f, n, "raw");
+			got = acm_rx(b2, rx, sizeof(rx), 300, "raw");
+			pr_info("ae9gpio: raw reply %d bytes: %*ph\n", got, got > 0 ? got : 0, rx);
+		}
+	}
 	if (i2cdump >= 0) {
 		static const unsigned int regs[] = { 0x40, 0x41, 0x42, 0x43,
 			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a,
