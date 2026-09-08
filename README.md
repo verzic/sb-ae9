@@ -83,9 +83,12 @@ support the AE-9).
 ## Using it
 - Volume: the ACM knob, or `amixer -c<N> sset Master <0-99>` (Windows curve; 18 ≈ −25 dB,
   44 ≈ −12 dB, 99 = 0 dB). PipeWire's slider is software gain; keep it at 100 %.
-- Output: `amixer -c<N> sset 'Output Select' Headphone|Speakers` (speakers not yet audible).
+- Output: `amixer -c<N> sset 'AE-9 Output' Headphone|Speakers` (speakers not yet audible). The
+  control is deliberately not called "Output Select": the desktop's ALSA card profiles map that
+  name onto sink ports and rewrite it on every route restore, flipping the ACM relay.
 - Effects: `amixer -c<N> sset 'Enable OutFX' on|off` plus the `FX:` switches.
 - ACM service off (diagnostic): `ae9_acm_poll=0` in `/etc/modprobe.d/sb-ae9.conf`.
+- Session defaults: `systemctl --user restart ae9-defaults` re-applies routing, level and default sink.
 
 ## Repository layout
 - `driver/ca0132/` — the codec driver (kernel `sound/hda/codecs/ca0132.c` + AE-9 support).

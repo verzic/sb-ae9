@@ -7018,9 +7018,17 @@ static int ca0132_alt_add_svm_enum(struct hda_codec *codec)
  */
 static int ca0132_alt_add_output_enum(struct hda_codec *codec)
 {
+	struct ca0132_spec *spec = codec->spec;
 	struct snd_kcontrol_new knew =
 		HDA_CODEC_MUTE_MONO("Output Select",
 				    OUTPUT_SOURCE_ENUM, 1, 0, HDA_OUTPUT);
+	/* AE-9: the desktop's ALSA card profiles (ACP) map an element called
+	 * "Output Select" with options Speakers/Headphone onto sink ports and
+	 * rewrite it on every route restore, which flips the ACM relay behind
+	 * the user's back (2026-09-08). A name ACP has no mapping for keeps the
+	 * routing with the driver and ae9-defaults. */
+	if (ca0132_quirk(spec) == QUIRK_AE9)
+		knew.name = "AE-9 Output";
 	knew.info = ca0132_alt_output_select_get_info;
 	knew.get = ca0132_alt_output_select_get;
 	knew.put = ca0132_alt_output_select_put;
