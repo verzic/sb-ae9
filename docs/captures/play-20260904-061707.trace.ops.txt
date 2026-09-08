@@ -1,0 +1,45 @@
+[0] 1151.217989 cad1 SCP target=0x96 src=0x20 req=0x3a get=0 dev=0 n=1 [0x3f800000]
+[0] 1151.345309 cad1 SCP target=0x96 src=0x20 req=0x29 get=0 dev=0 n=1 [0x00000000]
+[0] 1151.345891 cad1 SCP target=0x96 src=0x20 req=0x2a get=0 dev=0 n=1 [0x00000000]
+[0] 1151.346159 cad1 PARAM_EX ?(13)=164
+[0] 1151.346498 cad1 CHIPIO_WRITE addr=0x18b03c val=0x00000012
+[0] 1151.431268 cad1 SCP target=0x80 src=0x20 req=0x04 get=0 dev=0 n=1 [0x3f800000]
+[0] 1151.431935 cad1 SCP target=0x96 src=0x20 req=0x18 get=0 dev=0 n=1 [0x3f800000]
+[0] 1151.432591 cad1 SCP target=0x8f src=0x20 req=0x01 get=0 dev=0 n=1 [0x00000000]
+[0] 1151.433268 cad1 SCP target=0x96 src=0x20 req=0x1f get=0 dev=0 n=1 [0x00000000]
+[0] 1151.433936 cad1 SCP target=0x96 src=0x20 req=0x15 get=0 dev=0 n=1 [0x00000000]
+[0] 1151.434601 cad1 SCP target=0x96 src=0x20 req=0x3a get=0 dev=0 n=1 [0x00000000]
+[0] 1151.437715 cad1 GET nid=0x02 verb=0xa00 val=0x0
+[0] 1151.439772 cad1 SET_CVT_FORMAT nid=0x02 fmt=0x0011
+[0] 1151.439874 cad1 GET nid=0x02 verb=0xf06 val=0x0
+[0] 1151.439942 cad1 SET_STREAM nid=0x02 stream=5 ch=0
+[1] 1157.491790 cad1 SET_STREAM nid=0x02 stream=0 ch=0
+[1] 1157.491880 cad1 SET_CVT_FORMAT nid=0x02 fmt=0x0000
+[1] 1157.495260 cad1 SCP target=0x96 src=0x20 req=0x3a get=0 dev=0 n=1 [0x3f800000]
+[1] 1157.623319 cad1 SCP target=0x96 src=0x20 req=0x29 get=0 dev=0 n=1 [0x3f800000]
+[1] 1157.623987 cad1 SCP target=0x96 src=0x20 req=0x2a get=0 dev=0 n=1 [0x3f800000]
+[1] 1157.624319 cad1 PARAM_EX ?(13)=161
+[1] 1157.624653 cad1 CHIPIO_WRITE addr=0x18b03c val=0x00000012
+[1] 1157.708282 cad1 SCP target=0x80 src=0x20 req=0x04 get=0 dev=0 n=1 [0x3f800000]
+[1] 1157.708950 cad1 SCP target=0x96 src=0x20 req=0x18 get=0 dev=0 n=1 [0x3f800000]
+[1] 1157.709616 cad1 SCP target=0x8f src=0x20 req=0x01 get=0 dev=0 n=1 [0x00000000]
+[1] 1157.710283 cad1 SCP target=0x96 src=0x20 req=0x1f get=0 dev=0 n=1 [0x00000000]
+[1] 1157.710948 cad1 SCP target=0x96 src=0x20 req=0x15 get=0 dev=0 n=1 [0x00000000]
+[1] 1157.711615 cad1 SCP target=0x96 src=0x20 req=0x3a get=0 dev=0 n=1 [0x00000000]
+[1] 1157.714002 cad1 GET nid=0x02 verb=0xa00 val=0x0
+[1] 1157.715795 cad1 SET_CVT_FORMAT nid=0x02 fmt=0x0011
+[1] 1157.715870 cad1 GET nid=0x02 verb=0xf06 val=0x0
+[1] 1157.715940 cad1 SET_STREAM nid=0x02 stream=5 ch=0
+[2] 1163.766816 cad1 SET_STREAM nid=0x02 stream=0 ch=0
+[2] 1163.766888 cad1 SET_CVT_FORMAT nid=0x02 fmt=0x0000
+[2] 1163.770264 cad1 SCP target=0x96 src=0x20 req=0x3a get=0 dev=0 n=1 [0x3f800000]
+[2] 1163.897371 cad1 SCP target=0x96 src=0x20 req=0x29 get=0 dev=0 n=1 [0x00000000]
+[2] 1163.897996 cad1 SCP target=0x96 src=0x20 req=0x2a get=0 dev=0 n=1 [0x00000000]
+[2] 1163.898329 cad1 PARAM_EX ?(13)=164
+[2] 1163.898663 cad1 CHIPIO_WRITE addr=0x18b03c val=0x00000012
+[2] 1163.982373 cad1 SCP target=0x80 src=0x20 req=0x04 get=0 dev=0 n=1 [0x3f800000]
+[2] 1163.983003 cad1 SCP target=0x96 src=0x20 req=0x18 get=0 dev=0 n=1 [0x3f800000]
+[2] 1163.983542 cad1 SCP target=0x8f src=0x20 req=0x01 get=0 dev=0 n=1 [0x00000000]
+[2] 1163.984164 cad1 SCP target=0x96 src=0x20 req=0x1f get=0 dev=0 n=1 [0x00000000]
+[2] 1163.984748 cad1 SCP target=0x96 src=0x20 req=0x15 get=0 dev=0 n=1 [0x00000000]
+[2] 1163.985337 cad1 SCP target=0x96 src=0x20 req=0x3a get=0 dev=0 n=1 [0x00000000]

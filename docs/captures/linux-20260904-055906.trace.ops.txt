@@ -1,0 +1,409 @@
+[0] 74.895336 cad1 GET nid=0x00 verb=0xf00 val=0x0
+[0] 74.895397 cad1 GET nid=0x00 verb=0xf00 val=0x1
+[0] 74.895461 cad1 GET nid=0x00 verb=0xf00 val=0x2
+[0] 74.895831 cad1 GET nid=0x00 verb=0xf00 val=0x4
+[0] 74.896035 cad1 GET nid=0x01 verb=0xf00 val=0x5
+[0] 74.896140 cad1 GET nid=0x01 verb=0xf00 val=0x4
+[0] 74.896228 cad1 GET nid=0x01 verb=0xf00 val=0xf
+[0] 74.896326 cad1 GET nid=0x01 verb=0xf20 val=0x0
+[0] 74.896445 cad1 GET nid=0x02 verb=0xf00 val=0x9
+[0] 74.896592 cad1 GET nid=0x03 verb=0xf00 val=0x9
+[0] 74.896648 cad1 GET nid=0x04 verb=0xf00 val=0x9
+[0] 74.896741 cad1 GET nid=0x05 verb=0xf00 val=0x9
+[0] 74.896814 cad1 GET nid=0x06 verb=0xf00 val=0x9
+[0] 74.896876 cad1 GET nid=0x07 verb=0xf00 val=0x9
+[0] 74.896995 cad1 GET nid=0x08 verb=0xf00 val=0x9
+[0] 74.897064 cad1 GET nid=0x09 verb=0xf00 val=0x9
+[0] 74.897126 cad1 GET nid=0x0a verb=0xf00 val=0x9
+[0] 74.897189 cad1 GET nid=0x0b verb=0xf00 val=0x9
+[0] 74.897251 cad1 GET nid=0x0c verb=0xf00 val=0x9
+[0] 74.897314 cad1 GET nid=0x0d verb=0xf00 val=0x9
+[0] 74.897376 cad1 GET nid=0x0e verb=0xf00 val=0x9
+[0] 74.897439 cad1 GET nid=0x0f verb=0xf00 val=0x9
+[0] 74.897501 cad1 GET nid=0x10 verb=0xf00 val=0x9
+[0] 74.897564 cad1 GET nid=0x11 verb=0xf00 val=0x9
+[0] 74.897626 cad1 GET nid=0x12 verb=0xf00 val=0x9
+[0] 74.897689 cad1 GET nid=0x13 verb=0xf00 val=0x9
+[0] 74.897751 cad1 GET nid=0x14 verb=0xf00 val=0x9
+[0] 74.897814 cad1 CHIPIO_GET_PARAMETER id=0x09
+[0] 74.897876 cad1 GET nid=0x16 verb=0xf00 val=0x9
+[0] 74.897939 cad1 GET nid=0x17 verb=0xf00 val=0x9
+[0] 74.898001 cad1 GET nid=0x18 verb=0xf00 val=0x9
+[0] 74.898064 cad1 GET nid=0x0b verb=0xf1c val=0x0
+[0] 74.898201 cad1 GET nid=0x0b verb=0xf07 val=0x0
+[0] 74.898273 cad1 GET nid=0x0c verb=0xf1c val=0x0
+[0] 74.898335 cad1 GET nid=0x0c verb=0xf07 val=0x0
+[0] 74.898754 cad1 GET nid=0x0d verb=0xf1c val=0x0
+[0] 74.898814 cad1 GET nid=0x0d verb=0xf07 val=0x0
+[0] 74.898876 cad1 GET nid=0x0e verb=0xf1c val=0x0
+[0] 74.898957 cad1 GET nid=0x0e verb=0xf07 val=0x0
+[0] 74.899041 cad1 GET nid=0x0f verb=0xf1c val=0x0
+[0] 74.899106 cad1 GET nid=0x0f verb=0xf07 val=0x0
+[0] 74.899168 cad1 GET nid=0x10 verb=0xf1c val=0x0
+[0] 74.899231 cad1 GET nid=0x10 verb=0xf07 val=0x0
+[0] 74.899293 cad1 GET nid=0x11 verb=0xf1c val=0x0
+[0] 74.899355 cad1 GET nid=0x11 verb=0xf07 val=0x0
+[0] 74.899436 cad1 GET nid=0x12 verb=0xf1c val=0x0
+[0] 74.899503 cad1 GET nid=0x12 verb=0xf07 val=0x0
+[0] 74.899565 cad1 GET nid=0x13 verb=0xf1c val=0x0
+[0] 74.899644 cad1 GET nid=0x13 verb=0xf07 val=0x0
+[0] 74.899710 cad1 GET nid=0x18 verb=0xf1c val=0x0
+[0] 74.899849 cad1 GET nid=0x18 verb=0xf07 val=0x0
+[0] 74.899919 cad1 SET_POWER nid=0x01 val=0x00
+[0] 74.899981 cad1 SET_POWER nid=0x02 val=0x00
+[0] 74.900043 cad1 SET_POWER nid=0x03 val=0x00
+[0] 74.900124 cad1 SET_POWER nid=0x04 val=0x00
+[0] 74.900193 cad1 SET_POWER nid=0x05 val=0x00
+[0] 74.900270 cad1 SET_POWER nid=0x06 val=0x00
+[0] 74.900335 cad1 SET_POWER nid=0x07 val=0x00
+[0] 74.900418 cad1 SET_POWER nid=0x08 val=0x00
+[0] 74.900505 cad1 SET_POWER nid=0x09 val=0x00
+[0] 74.900566 cad1 SET_POWER nid=0x0a val=0x00
+[0] 74.900629 cad1 SET_POWER nid=0x0b val=0x00
+[0] 74.900689 cad1 SET_POWER nid=0x0c val=0x00
+[0] 74.900752 cad1 SET_POWER nid=0x0d val=0x00
+[0] 74.900814 cad1 SET_POWER nid=0x0e val=0x00
+[0] 74.900877 cad1 SET_POWER nid=0x0f val=0x00
+[0] 74.900939 cad1 SET_POWER nid=0x10 val=0x00
+[0] 74.901019 cad1 SET_POWER nid=0x11 val=0x00
+[0] 74.901103 cad1 SET_POWER nid=0x12 val=0x00
+[0] 74.901225 cad1 SET_POWER nid=0x13 val=0x00
+[0] 74.901345 cad1 SET_POWER nid=0x14 val=0x00
+[0] 74.901397 cad1 SET_POWER nid=0x15 val=0x00
+[0] 74.901460 cad1 SET_POWER nid=0x16 val=0x00
+[0] 74.901551 cad1 SET_POWER nid=0x17 val=0x00
+[0] 74.901625 cad1 SET_POWER nid=0x18 val=0x00
+[0] 74.901797 cad1 GET nid=0x01 verb=0xf05 val=0x0
+[0] 74.901913 cad2 GET nid=0x00 verb=0xf00 val=0x0
+[0] 74.902236 cad2 GET nid=0x00 verb=0xf00 val=0x1
+[0] 74.902311 cad2 GET nid=0x00 verb=0xf00 val=0x2
+[0] 74.902394 cad2 GET nid=0x00 verb=0xf00 val=0x4
+[0] 74.902460 cad2 GET nid=0x01 verb=0xf00 val=0x5
+[0] 74.902522 cad2 GET nid=0x01 verb=0xf00 val=0x4
+[0] 74.902585 cad2 GET nid=0x01 verb=0xf00 val=0xf
+[0] 74.902647 cad2 GET nid=0x01 verb=0xf20 val=0x0
+[0] 74.902710 cad2 GET nid=0x02 verb=0xf00 val=0x9
+[0] 74.902772 cad2 GET nid=0x03 verb=0xf00 val=0x9
+[0] 74.902836 cad2 GET nid=0x04 verb=0xf00 val=0x9
+[0] 74.902898 cad2 GET nid=0x05 verb=0xf00 val=0x9
+[0] 74.902960 cad2 GET nid=0x06 verb=0xf00 val=0x9
+[0] 74.903044 cad2 GET nid=0x07 verb=0xf00 val=0x9
+[0] 74.903105 cad2 GET nid=0x08 verb=0xf00 val=0x9
+[0] 74.903168 cad2 GET nid=0x09 verb=0xf00 val=0x9
+[0] 74.903230 cad2 GET nid=0x0a verb=0xf00 val=0x9
+[0] 74.903293 cad2 GET nid=0x0b verb=0xf00 val=0x9
+[0] 74.903355 cad2 GET nid=0x0c verb=0xf00 val=0x9
+[0] 74.903418 cad2 GET nid=0x0d verb=0xf00 val=0x9
+[0] 74.903522 cad2 GET nid=0x0e verb=0xf00 val=0x9
+[0] 74.903584 cad2 GET nid=0x0f verb=0xf00 val=0x9
+[0] 74.903647 cad2 GET nid=0x10 verb=0xf00 val=0x9
+[0] 74.903709 cad2 GET nid=0x11 verb=0xf00 val=0x9
+[0] 74.903772 cad2 GET nid=0x12 verb=0xf00 val=0x9
+[0] 74.903835 cad2 GET nid=0x13 verb=0xf00 val=0x9
+[0] 74.903948 cad2 GET nid=0x14 verb=0xf00 val=0x9
+[0] 74.904001 cad2 GET nid=0x15 verb=0xf00 val=0x9
+[0] 74.904081 cad2 GET nid=0x16 verb=0xf00 val=0x9
+[0] 74.904148 cad2 GET nid=0x17 verb=0xf00 val=0x9
+[0] 74.904210 cad2 GET nid=0x18 verb=0xf00 val=0x9
+[0] 74.904273 cad2 GET nid=0x0b verb=0xf1c val=0x0
+[0] 74.904335 cad2 GET nid=0x0b verb=0xf07 val=0x0
+[0] 74.904397 cad2 GET nid=0x0c verb=0xf1c val=0x0
+[0] 74.904460 cad2 GET nid=0x0c verb=0xf07 val=0x0
+[0] 74.904522 cad2 GET nid=0x0d verb=0xf1c val=0x0
+[0] 74.904585 cad2 GET nid=0x0d verb=0xf07 val=0x0
+[0] 74.904647 cad2 GET nid=0x0e verb=0xf1c val=0x0
+[0] 74.904710 cad2 GET nid=0x0e verb=0xf07 val=0x0
+[0] 74.904772 cad2 GET nid=0x0f verb=0xf1c val=0x0
+[0] 74.904835 cad2 GET nid=0x0f verb=0xf07 val=0x0
+[0] 74.904921 cad2 GET nid=0x10 verb=0xf1c val=0x0
+[0] 74.904981 cad2 GET nid=0x10 verb=0xf07 val=0x0
+[0] 74.905061 cad2 GET nid=0x11 verb=0xf1c val=0x0
+[0] 74.905127 cad2 GET nid=0x11 verb=0xf07 val=0x0
+[0] 74.905219 cad2 GET nid=0x12 verb=0xf1c val=0x0
+[0] 74.905274 cad2 GET nid=0x12 verb=0xf07 val=0x0
+[0] 74.905353 cad2 GET nid=0x13 verb=0xf1c val=0x0
+[0] 74.905436 cad2 GET nid=0x13 verb=0xf07 val=0x0
+[0] 74.905533 cad2 GET nid=0x18 verb=0xf1c val=0x0
+[0] 74.905606 cad2 GET nid=0x18 verb=0xf07 val=0x0
+[0] 74.905686 cad2 SET_POWER nid=0x01 val=0x00
+[0] 74.905770 cad2 SET_POWER nid=0x02 val=0x00
+[0] 74.905853 cad2 SET_POWER nid=0x03 val=0x00
+[0] 74.905936 cad2 SET_POWER nid=0x04 val=0x00
+[0] 74.906019 cad2 SET_POWER nid=0x05 val=0x00
+[0] 74.906103 cad2 SET_POWER nid=0x06 val=0x00
+[0] 74.906168 cad2 SET_POWER nid=0x07 val=0x00
+[0] 74.906357 cad2 SET_POWER nid=0x08 val=0x00
+[0] 74.906419 cad2 SET_POWER nid=0x09 val=0x00
+[0] 74.906483 cad2 SET_POWER nid=0x0a val=0x00
+[0] 74.906547 cad2 SET_POWER nid=0x0b val=0x00
+[0] 74.906712 cad2 SET_POWER nid=0x0c val=0x00
+[0] 74.906773 cad2 SET_POWER nid=0x0d val=0x00
+[0] 74.906854 cad2 SET_POWER nid=0x0e val=0x00
+[0] 74.906936 cad2 SET_POWER nid=0x0f val=0x00
+[0] 74.907019 cad2 SET_POWER nid=0x10 val=0x00
+[0] 74.907103 cad2 SET_POWER nid=0x11 val=0x00
+[0] 74.907186 cad2 SET_POWER nid=0x12 val=0x00
+[0] 74.907269 cad2 SET_POWER nid=0x13 val=0x00
+[0] 74.907335 cad2 SET_POWER nid=0x14 val=0x00
+[0] 74.907398 cad2 SET_POWER nid=0x15 val=0x00
+[0] 74.907503 cad2 SET_POWER nid=0x16 val=0x00
+[0] 74.907566 cad2 SET_POWER nid=0x17 val=0x00
+[0] 74.907692 cad2 SET_POWER nid=0x18 val=0x00
+[0] 74.907754 cad2 GET nid=0x01 verb=0xf05 val=0x0
+[0] 74.923439 cad1 FLAG IDLE_ENABLE(2)=0
+[0] 74.923711 cad1 CHIPIO_WRITE addr=0x18b0a4 val=0x000000c2
+[0] 74.923773 cad1 RESET nid=0x01 val=0x00
+[0] 74.923836 cad1 RESET nid=0x01 val=0x00
+[0] 74.923900 cad1 GET nid=0x11 verb=0xf00 val=0xc
+[0] 74.923980 cad1 GET nid=0x0b verb=0xf00 val=0xc
+[0] 74.924046 cad1 GET nid=0x0c verb=0xf00 val=0xc
+[0] 74.924107 cad1 GET nid=0x0d verb=0xf00 val=0xc
+[0] 74.924169 cad1 GET nid=0x0e verb=0xf00 val=0xc
+[0] 74.924231 cad1 GET nid=0x0f verb=0xf00 val=0xc
+[0] 74.924294 cad1 GET nid=0x10 verb=0xf00 val=0xc
+[0] 74.924356 cad1 GET nid=0x12 verb=0xf00 val=0xc
+[0] 74.924420 cad1 GET nid=0x12 verb=0xf00 val=0xd
+[0] 74.924482 cad1 GET nid=0x13 verb=0xf00 val=0xc
+[0] 74.924561 cad1 SET_UNSOL_ENABLE nid=0x11 val=0x81
+[0] 74.924628 cad1 SET_UNSOL_ENABLE nid=0x12 val=0x82
+[0] 74.924694 cad1 SET_UNSOL_ENABLE nid=0x16 val=0x83
+[0] 74.924775 cad1 SET_UNSOL_ENABLE nid=0x10 val=0x84
+[0] 74.924839 cad1 GET nid=0x02 verb=0xf00 val=0x9
+[0] 74.924950 cad1 GET nid=0x02 verb=0xf00 val=0xa
+[0] 74.925040 cad1 GET nid=0x02 verb=0xf00 val=0xb
+[0] 74.925109 cad1 GET nid=0x07 verb=0xf00 val=0x9
+[0] 74.925172 cad1 GET nid=0x07 verb=0xf00 val=0xa
+[0] 74.925233 cad1 GET nid=0x07 verb=0xf00 val=0xb
+[0] 74.925296 cad1 GET nid=0x0a verb=0xf00 val=0x9
+[0] 74.925374 cad1 GET nid=0x0a verb=0xf00 val=0xa
+[0] 74.925442 cad1 GET nid=0x0a verb=0xf00 val=0xb
+[0] 74.925504 cad1 GET nid=0x05 verb=0xf00 val=0x9
+[0] 74.925567 cad1 GET nid=0x05 verb=0xf00 val=0xa
+[0] 74.925630 cad1 GET nid=0x05 verb=0xf00 val=0xb
+[0] 74.925860 cad1 8051_DIRECT_WRITE addr=0x93 val=0x10
+[0] 74.926045 cad1 PLL_PMU_WRITE addr=0x0044 val=0xc2
+[0] 74.946931 cad1 8051_DIRECT_WRITE addr=0x90 val=0x00
+[0] 74.947006 cad1 8051_DIRECT_WRITE addr=0x90 val=0x10
+[0] 74.969046 cad1 PARAM_EX CONN_POINT_ID(29)=10
+[0] 74.969234 cad1 PARAM_EX CONN_POINT_SAMPLE_RATE(30)=9
+[0] 74.969421 cad1 PARAM_EX CONN_POINT_ID(29)=11
+[0] 74.969609 cad1 PARAM_EX CONN_POINT_SAMPLE_RATE(30)=9
+[0] 74.969671 cad1 PARAM SPDIF1_SOURCE(2)=0
+[0] 74.969734 cad1 PARAM ?(0)=0
+[0] 74.969796 cad1 PARAM VIP_SOURCE(1)=0
+[0] 74.969859 cad1 PARAM PORTA_160OHM_GAIN(8)=6
+[0] 74.969922 cad1 PARAM PORTD_160OHM_GAIN(10)=6
+[0] 74.969984 cad1 FLAG DSP_96KHZ(9)=1
+[0] 74.970046 cad1 FLAG DAC_96KHZ(8)=1
+[0] 74.970109 cad1 FLAG ADC_B_96KHZ(6)=1
+[0] 74.970171 cad1 FLAG ADC_C_96KHZ(7)=1
+[0] 74.970234 cad1 FLAG SRC_RATE_96KHZ(11)=1
+[0] 74.970296 cad1 FLAG IDLE_ENABLE(2)=0
+[0] 74.970359 cad1 FLAG SPDIF2OUT(4)=0
+[0] 74.970421 cad1 FLAG PORT_A_COMMON_MODE?(21)=0
+[0] 74.970484 cad1 FLAG SPDIF2_LOOP?(20)=1
+[0] 74.970546 cad1 CT_EXTENSIONS_ENABLE val=0x01
+[0] 74.970609 cad1 VERB nid=0x02 verb=0x797 val=0x0
+[0] 74.970671 cad1 VERB nid=0x02 verb=0x798 val=0x0
+[0] 74.970734 cad1 VERB nid=0x03 verb=0x797 val=0x0
+[0] 74.970796 cad1 VERB nid=0x03 verb=0x798 val=0x0
+[0] 74.970859 cad1 VERB nid=0x04 verb=0x797 val=0x0
+[0] 74.970920 cad1 VERB nid=0x04 verb=0x798 val=0x0
+[0] 74.970982 cad1 VERB nid=0x07 verb=0x797 val=0x0
+[0] 74.971045 cad1 VERB nid=0x07 verb=0x798 val=0x0
+[0] 74.971107 cad1 VERB nid=0x01 verb=0x793 val=0x0
+[0] 74.971170 cad1 VERB nid=0x01 verb=0x794 val=0x53
+[0] 74.971232 cad1 VERB nid=0x01 verb=0x790 val=0x23
+[0] 74.971420 cad1 PLL_PMU_WRITE addr=0x0049 val=0x88
+[0] 74.971607 cad1 8051_EXRAM_WRITE addr=0xfef0 val=0x75
+[0] 74.971669 cad1 8051_EXRAM_WRITE addr=0xfef1 val=0xd3
+[0] 74.971732 cad1 8051_EXRAM_WRITE addr=0xfef2 val=0x09
+[0] 74.971794 cad1 8051_EXRAM_WRITE addr=0xfef3 val=0x53
+[0] 74.971857 cad1 8051_EXRAM_WRITE addr=0xfef4 val=0xd4
+[0] 74.971920 cad1 8051_EXRAM_WRITE addr=0xfef5 val=0xef
+[0] 74.971982 cad1 8051_EXRAM_WRITE addr=0xfef6 val=0x75
+[0] 74.972045 cad1 8051_EXRAM_WRITE addr=0xfef7 val=0xd3
+[0] 74.972107 cad1 8051_EXRAM_WRITE addr=0xfef8 val=0x09
+[0] 74.972169 cad1 8051_EXRAM_WRITE addr=0xfef9 val=0x02
+[0] 74.972232 cad1 8051_EXRAM_WRITE addr=0xfefa val=0x37
+[0] 74.972295 cad1 8051_EXRAM_WRITE addr=0xfefb val=0x78
+[0] 74.972357 cad1 8051_DIRECT_WRITE addr=0xce val=0x3c
+[0] 74.972420 cad1 8051_DIRECT_WRITE addr=0xc9 val=0x75
+[0] 74.972482 cad1 8051_DIRECT_WRITE addr=0xce val=0x3d
+[0] 74.972545 cad1 8051_DIRECT_WRITE addr=0xc9 val=0xb7
+[0] 74.972732 cad1 8051_EXRAM_WRITE addr=0xfee8 val=0x02
+[0] 74.972795 cad1 8051_EXRAM_WRITE addr=0xfee9 val=0x68
+[0] 74.972857 cad1 8051_EXRAM_WRITE addr=0xfeea val=0x62
+[0] 74.972920 cad1 8051_DIRECT_WRITE addr=0xce val=0x3a
+[0] 74.972982 cad1 8051_DIRECT_WRITE addr=0xc9 val=0x46
+[0] 74.973044 cad1 8051_DIRECT_WRITE addr=0xce val=0x3b
+[0] 74.973107 cad1 8051_DIRECT_WRITE addr=0xc9 val=0xe8
+[0] 74.973295 cad1 8051_EXRAM_WRITE addr=0x1920 val=0x00
+[0] 74.973357 cad1 8051_DIRECT_WRITE addr=0xce val=0x39
+[0] 74.973419 cad1 8051_DIRECT_WRITE addr=0xc9 val=0x46
+[0] 74.973607 cad1 8051_EXRAM_WRITE addr=0x09b7 val=0x10
+[0] 74.973795 cad1 8051_EXRAM_WRITE addr=0x09af val=0x01
+[0] 74.973857 cad1 8051_EXRAM_WRITE addr=0x09b0 val=0x05
+[0] 74.974044 cad1 8051_EXRAM_WRITE addr=0x0973 val=0x14
+[0] 74.974107 cad1 VERB nid=0x15 verb=0x6ff val=0xc4
+[0] 74.974357 cad1 CHIPIO_WRITE addr=0x18b008 val=0x000000f8
+[0] 74.974607 cad1 CHIPIO_WRITE addr=0x18b008 val=0x000000f0
+[0] 74.974920 cad1 CHIPIO_READ addr=0x18b030
+[0] 74.975170 cad1 CHIPIO_WRITE addr=0x18b030 val=0x00000020
+[0] 74.975357 cad1 PLL_PMU_WRITE addr=0x0000 val=0xff
+[0] 74.975545 cad1 PLL_PMU_WRITE addr=0x0005 val=0x0b
+[0] 74.975732 cad1 PLL_PMU_WRITE addr=0x0006 val=0xff
+[0] 74.977781 cad1 DSP_INIT val=0x00
+[0] 74.977838 cad1 CHIPIO_STREAM_FORMAT val=0x0047
+[0] 74.978024 cad1 PORT_ALLOC_CONFIG val=0x07
+[0] 74.978087 cad1 PORT_ALLOC val=0x10
+[0] 74.998963 cad1 PORT_ALLOC_GET val=0x00
+[0] 74.999025 cad1 SET_STREAM nid=0x15 stream=5 ch=0
+[0] 74.999295 cad1 CHIPIO_WRITE addr=0x110ff0 val=0x00010000
+[0] 74.999608 cad1 CHIPIO_READ addr=0x110ff0
+[0] 74.999858 cad1 CHIPIO_WRITE addr=0x110ff8 val=0xf0010000
+[0] 74.999984 cad1 CHIPIO_WRITE addr=0x110ffc val=0x00000000
+[0] 75.000233 cad1 CHIPIO_WRITE addr=0x110fc0 val=0x000000ff
+[0] 75.000483 cad1 CHIPIO_WRITE addr=0x110f0c val=0xffffffff
+[0] 75.000733 cad1 CHIPIO_WRITE addr=0x110f00 val=0x00000008
+[0] 75.000858 cad1 CHIPIO_WRITE addr=0x110f04 val=0xfff70000
+[0] 75.000983 cad1 CHIPIO_WRITE addr=0x110f08 val=0xfff7fff7
+[0] 75.001233 cad1 CHIPIO_WRITE addr=0x110ff0 val=0x00000001
+[0] 75.001545 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.001816 cad1 CHIPIO_WRITE addr=0x100d20 val=0x00000005
+[0] 75.001962 cad1 CHIPIO_WRITE addr=0x100d24 val=0x0000000c
+[0] 75.002212 cad1 CHIPIO_WRITE addr=0x100d34 val=0x0000000d
+[0] 75.002337 cad1 CHIPIO_WRITE addr=0x100d38 val=0x0000000e
+[0] 75.002462 cad1 CHIPIO_WRITE addr=0x100d3c val=0x0000000f
+[0] 75.002712 cad1 CHIPIO_WRITE addr=0x100e34 val=0xf1000000
+[0] 75.003024 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.024150 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.045150 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.067207 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.089175 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.110219 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.132198 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.153230 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.175212 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.175649 cad1 CHIPIO_WRITE addr=0x110ff0 val=0x00010000
+[0] 75.176068 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.176399 cad1 CHIPIO_WRITE addr=0x110ff8 val=0xf0000000
+[0] 75.176568 cad1 CHIPIO_WRITE addr=0x110ffc val=0x00000000
+[0] 75.176900 cad1 CHIPIO_WRITE addr=0x110fc0 val=0x000000ff
+[0] 75.177232 cad1 CHIPIO_WRITE addr=0x110f0c val=0xffffffff
+[0] 75.177568 cad1 CHIPIO_WRITE addr=0x110f00 val=0x00040000
+[0] 75.177706 cad1 CHIPIO_WRITE addr=0x110f04 val=0xfffe0000
+[0] 75.177878 cad1 CHIPIO_WRITE addr=0x110f08 val=0x7fff7fff
+[0] 75.178206 cad1 CHIPIO_WRITE addr=0x110ff0 val=0x00000001
+[0] 75.178630 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.179044 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.200218 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.221221 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.243231 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.265232 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.265649 cad1 CHIPIO_WRITE addr=0x110f00 val=0x00050000
+[0] 75.265817 cad1 CHIPIO_WRITE addr=0x110f04 val=0xdffe0000
+[0] 75.265983 cad1 CHIPIO_WRITE addr=0x110f08 val=0x6fff6fff
+[0] 75.266281 cad1 CHIPIO_WRITE addr=0x110ff0 val=0x00000001
+[0] 75.266690 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.267107 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.289234 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.310228 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.332259 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.354235 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.354675 cad1 CHIPIO_WRITE addr=0x110ff0 val=0x00010000
+[0] 75.355089 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.355421 cad1 CHIPIO_WRITE addr=0x110ff8 val=0xf0000000
+[0] 75.355589 cad1 CHIPIO_WRITE addr=0x110ffc val=0x00000000
+[0] 75.355930 cad1 CHIPIO_WRITE addr=0x110fc0 val=0x000000ff
+[0] 75.356255 cad1 CHIPIO_WRITE addr=0x110f0c val=0xffffffff
+[0] 75.356589 cad1 CHIPIO_WRITE addr=0x110f00 val=0x00040001
+[0] 75.356755 cad1 CHIPIO_WRITE addr=0x110f04 val=0xfffe0000
+[0] 75.356925 cad1 CHIPIO_WRITE addr=0x110f08 val=0x7fff7fff
+[0] 75.357255 cad1 CHIPIO_WRITE addr=0x110ff0 val=0x00000001
+[0] 75.357658 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.358067 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.380255 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.402256 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.424238 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.446238 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.446653 cad1 CHIPIO_WRITE addr=0x110f00 val=0x00050001
+[0] 75.446809 cad1 CHIPIO_WRITE addr=0x110f04 val=0x1ffe0000
+[0] 75.446934 cad1 CHIPIO_WRITE addr=0x110f08 val=0x0fff0fff
+[0] 75.447257 cad1 CHIPIO_WRITE addr=0x110ff0 val=0x00000001
+[0] 75.447677 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.448050 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.469213 cad1 CHIPIO_READ addr=0x110ff0
+[0] 75.469468 cad1 PORT_FREE val=0x10
+[0] 75.469613 cad1 SET_STREAM nid=0x15 stream=0 ch=0
+[0] 75.470028 cad1 CHIPIO_READ addr=0x100e30
+[0] 75.470341 cad1 CHIPIO_WRITE addr=0x100e30 val=0xfff83c00
+[0] 75.470674 cad1 CHIPIO_WRITE addr=0x100e30 val=0xfff83c0f
+[0] 75.471096 cad1 CHIPIO_READ addr=0x040004
+[0] 75.493280 cad1 CHIPIO_READ addr=0x040004
+[0] 75.493384 cad1 GET nid=0x01 verb=0xf00 val=0x4
+[0] 75.493468 cad1 GET nid=0x02 verb=0xf00 val=0x9
+[0] 75.493535 cad1 GET nid=0x03 verb=0xf00 val=0x9
+[0] 75.493615 cad1 GET nid=0x04 verb=0xf00 val=0x9
+[0] 75.493695 cad1 GET nid=0x05 verb=0xf00 val=0x9
+[0] 75.493779 cad1 GET nid=0x06 verb=0xf00 val=0x9
+[0] 75.493863 cad1 GET nid=0x07 verb=0xf00 val=0x9
+[0] 75.493949 cad1 GET nid=0x08 verb=0xf00 val=0x9
+[0] 75.494033 cad1 GET nid=0x09 verb=0xf00 val=0x9
+[0] 75.494115 cad1 GET nid=0x0a verb=0xf00 val=0x9
+[0] 75.494197 cad1 GET nid=0x0b verb=0xf00 val=0x9
+[0] 75.494281 cad1 GET nid=0x0c verb=0xf00 val=0x9
+[0] 75.494366 cad1 GET nid=0x0d verb=0xf00 val=0x9
+[0] 75.494447 cad1 GET nid=0x0e verb=0xf00 val=0x9
+[0] 75.494531 cad1 GET nid=0x0f verb=0xf00 val=0x9
+[0] 75.494615 cad1 GET nid=0x10 verb=0xf00 val=0x9
+[0] 75.494697 cad1 GET nid=0x11 verb=0xf00 val=0x9
+[0] 75.494781 cad1 GET nid=0x12 verb=0xf00 val=0x9
+[0] 75.494865 cad1 GET nid=0x13 verb=0xf00 val=0x9
+[0] 75.494949 cad1 GET nid=0x14 verb=0xf00 val=0x9
+[0] 75.495032 cad1 CHIPIO_GET_PARAMETER id=0x09
+[0] 75.495115 cad1 GET nid=0x16 verb=0xf00 val=0x9
+[0] 75.495201 cad1 GET nid=0x17 verb=0xf00 val=0x9
+[0] 75.495282 cad1 GET nid=0x18 verb=0xf00 val=0x9
+[0] 75.495366 cad1 GET nid=0x0b verb=0xf1c val=0x0
+[0] 75.495447 cad1 GET nid=0x0b verb=0xf07 val=0x0
+[0] 75.495531 cad1 GET nid=0x0c verb=0xf1c val=0x0
+[0] 75.495615 cad1 GET nid=0x0c verb=0xf07 val=0x0
+[0] 75.495697 cad1 GET nid=0x0d verb=0xf1c val=0x0
+[0] 75.495781 cad1 GET nid=0x0d verb=0xf07 val=0x0
+[0] 75.495864 cad1 GET nid=0x0e verb=0xf1c val=0x0
+[0] 75.495953 cad1 GET nid=0x0e verb=0xf07 val=0x0
+[0] 75.496024 cad1 GET nid=0x0f verb=0xf1c val=0x0
+[0] 75.496095 cad1 GET nid=0x0f verb=0xf07 val=0x0
+[0] 75.496162 cad1 GET nid=0x10 verb=0xf1c val=0x0
+[0] 75.496233 cad1 GET nid=0x10 verb=0xf07 val=0x0
+[0] 75.496323 cad1 GET nid=0x11 verb=0xf1c val=0x0
+[0] 75.496406 cad1 GET nid=0x11 verb=0xf07 val=0x0
+[0] 75.496489 cad1 GET nid=0x12 verb=0xf1c val=0x0
+[0] 75.496572 cad1 GET nid=0x12 verb=0xf07 val=0x0
+[0] 75.496656 cad1 GET nid=0x13 verb=0xf1c val=0x0
+[0] 75.496739 cad1 GET nid=0x13 verb=0xf07 val=0x0
+[0] 75.496822 cad1 GET nid=0x18 verb=0xf1c val=0x0
+[0] 75.496906 cad1 GET nid=0x18 verb=0xf07 val=0x0
+[0] 75.496994 cad1 GET nid=0x02 verb=0xf00 val=0x12
+[0] 75.497069 cad1 GET nid=0x03 verb=0xf00 val=0x12
+[0] 75.497158 cad1 GET nid=0x04 verb=0xf00 val=0x12
+[0] 75.497243 cad1 GET nid=0x0b verb=0xf00 val=0x12
+[0] 75.497326 cad1 GET nid=0x11 verb=0xf00 val=0x12
+[0] 75.497409 cad1 GET nid=0x07 verb=0xf00 val=0xd
+[0] 75.497492 cad1 GET nid=0x08 verb=0xf00 val=0xd
+[0] 75.497569 cad1 GET nid=0x13 verb=0xf00 val=0xd
+[0] 75.498156 cad1 SCP target=0x80 src=0x00 req=0x0c get=0 dev=0 n=1 [0x00000003]
+[0] 75.498490 cad1 SCP target=0x80 src=0x00 req=0x0c get=1 dev=0 n=0 []
+[1] 76.502179 cad1 SCP target=0x80 src=0x00 req=0x0c get=1 dev=0 n=0 []
+[1] 77.502516 cad1 SCP target=0x80 src=0x00 req=0x0a get=0 dev=0 n=1 [0x00000000]
+[1] 77.503156 cad1 SCP target=0x80 src=0x00 req=0x0b get=0 dev=0 n=1 [0x00000001]
+[1] 77.503803 cad1 SCP target=0x80 src=0x00 req=0x0c get=0 dev=0 n=1 [0x00000004]
+[1] 77.504135 cad1 SCP target=0x80 src=0x00 req=0x0c get=1 dev=0 n=0 []
+[2] 78.521304 cad1 SCP target=0x80 src=0x00 req=0x0c get=1 dev=0 n=0 []
+[3] 79.522687 cad1 SCP target=0x80 src=0x00 req=0x0c get=0 dev=0 n=1 [0x00000005]
+[3] 79.522973 cad1 SCP target=0x80 src=0x00 req=0x0c get=1 dev=0 n=0 []
+[3] 80.522398 cad1 SCP target=0x80 src=0x00 req=0x0c get=1 dev=0 n=0 []
+[4] 81.530785 cad1 SCP target=0x80 src=0x00 req=0x0c get=0 dev=0 n=1 [0x00000000]
+[4] 81.531108 cad1 SCP target=0x80 src=0x00 req=0x0c get=1 dev=0 n=0 []
+[5] 82.539516 cad1 SCP target=0x80 src=0x00 req=0x0c get=1 dev=0 n=0 []

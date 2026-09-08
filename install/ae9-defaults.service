@@ -1,0 +1,12 @@
+[Unit]
+Description=Sound Blaster AE-9 session defaults (routing, PipeWire default sink)
+After=pipewire.service wireplumber.service
+Wants=pipewire.service wireplumber.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/sb-ae9/ae9-defaults.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,22 @@
+*.o
+*.ko
+*.mod
+*.mod.c
+*.cmd
+.*.cmd
+*.order
+*.symvers
+Module.symvers
+modules.order
+.tmp_versions/
+*.bak
+*.orig
+*.pre-*
+# never commit Creative's binaries or anything carved from them
+*.sys
+*.dll
+*.exe
+*.cat
+*.inf
+ae9-dsp-*overlay*.bin
+ctefx*.bin
