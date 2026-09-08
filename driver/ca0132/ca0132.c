@@ -1157,6 +1157,7 @@ struct ca0132_spec {
 	int ae9_acm_turbo;		/* 50 ms polling ticks left after knob movement */
 	bool ae9_acm_disp_dirty;	/* volume changed: refresh the display */
 	bool ae9_acm_pending_mode;	/* Output Select changed: push HP/SP to the ACM */
+	bool ae9_acm_pending_fx;	/* Enable OutFX changed: update the ACM SBX light */
 	bool ae9_pm_held;		/* runtime-PM reference held: codec stays in D0 */
 	int ae9_knob_acc;		/* encoder detents not yet turned into volume points */
 	int ae9_knob_dir;		/* last encoder direction seen (Windows: board+0x288) */
@@ -6571,6 +6572,8 @@ static int ca0132_switch_put(struct snd_kcontrol *kcontrol,
 	/* PE */
 	if (nid == PLAY_ENHANCEMENT) {
 		spec->effects_switch[nid - EFFECT_START_NID] = *valp;
+		if (ca0132_quirk(spec) == QUIRK_AE9)
+			spec->ae9_acm_pending_fx = true;	/* SBX light follows */
 		return ca0132_pe_switch_set(codec);
 	}
 
@@ -9343,6 +9346,60 @@ static void ae9_acm_show_volume(struct ca0132_spec *spec)
 /* Push the current Output Select to the ACM's analog mux (§10.6: reg2 bit2 =
  * HP select, reg2 bit6 = HP amp / HP_Mute off, reg7 bit0 = speaker select) and
  * show "-HP-"/"-SP-" for ~5 s like Windows (AcmShowSpeakerChangeMaxCounts). */
+/* F0 22 02 01 <0|1> F7: the ACM's SBX light (Windows sends its SBX state; the
+ * capture had it on, which is why an earlier build lit it unconditionally). */
+static void ae9_acm_set_fx_light(struct ca0132_spec *spec, bool on)
+{
+	u8 f[6] = { 0xf0, 0x22, 0x02, 0x01, on ? 0x01 : 0x00, 0xf7 };
+
+	ae9_acm_cmd(spec, f, sizeof(f));
+}
+
+static bool ae9_fx_enabled(struct ca0132_spec *spec)
+{
+	return spec->effects_switch[PLAY_ENHANCEMENT - EFFECT_START_NID] != 0;
+}
+
+/* F0 B1 01 <n> F7 -> RX 8: [3]==n, [4]==1 = a press happened, [5..6] = its
+ * length in ms (Windows 0x3f6b0: short press on button 1 = SBX toggle, long
+ * press = display on/off; button 2 = the knob: short = mute, mid = output
+ * toggle, long = LED). Returns the press length, 0 if none. */
+static int ae9_acm_button(struct ca0132_spec *spec, int n)
+{
+	u8 q[5] = { 0xf0, 0xb1, 0x01, n, 0xf7 };
+	u8 rx[8];
+	int got;
+
+	ae9_acm_tx(spec, q, sizeof(q));
+	got = ae9_acm_rx(spec, rx, sizeof(rx), 30);
+	if (got < 5 || rx[0] != 0xf0 || rx[3] != n || rx[4] != 1)
+		return 0;
+	return got >= 7 ? max(1, rx[5] | rx[6] << 8) : 1;
+}
+
+/* The ACM's SBX button toggles Enable OutFX, like Windows does. */
+static void ae9_acm_service_buttons(struct hda_codec *codec)
+{
+	struct ca0132_spec *spec = codec->spec;
+	struct snd_kcontrol *kctl;
+	int ms = ae9_acm_button(spec, 1);
+
+	if (!ms)
+		return;
+	if (ms >= 5000) {			/* AcmSBXLongPressMs: display toggle on Windows */
+		codec_info(codec, "AE-9 ACM: SBX button long press (%d ms), ignored\n", ms);
+		return;
+	}
+	spec->effects_switch[PLAY_ENHANCEMENT - EFFECT_START_NID] = !ae9_fx_enabled(spec);
+	codec_info(codec, "AE-9 ACM: SBX button (%d ms) -> OutFX %s\n", ms,
+		   ae9_fx_enabled(spec) ? "on" : "off");
+	ca0132_pe_switch_set(codec);
+	spec->ae9_acm_pending_fx = true;
+	kctl = snd_hda_find_mixer_ctl(codec, "Enable OutFX Playback Switch");
+	if (kctl)
+		snd_ctl_notify(codec->card, SNDRV_CTL_EVENT_MASK_VALUE, &kctl->id);
+}
+
 /* Windows writes exactly one ACM register bit for the output: reg2 bit6 (the
  * headphone amp, item 3, F0 03 03 02 <00|40> 40). reg2 bit2 / reg7 bit0
  * (items 5/6) are the module's OWN output selector and are only ever read by
@@ -9406,7 +9463,6 @@ static bool ae9_acm_init(struct hda_codec *codec)
 	static const u8 filt[]  = { 0xf0, 0x43, 0x04, 0x64, 0x00, 0xf4, 0x01, 0xf7 };
 	static const u8 tlong1[] = { 0xf0, 0x32, 0x03, 0x01, 0x88, 0x13, 0xf7 };
 	static const u8 cmd05[] = { 0xf0, 0x05, 0x03, 0x02, 0x01, 0x00, 0xf7 };
-	static const u8 flag1[] = { 0xf0, 0x22, 0x02, 0x01, 0x01, 0xf7 };
 	static const u8 led[]   = { 0xf0, 0x22, 0x02, 0x02, 0x01, 0xf7 };
 	static const u8 blink[] = { 0xf0, 0x21, 0x03, 0x02, 0x00, 0x00, 0xf7 };
 	u8 rx[16], lcr;
@@ -9465,7 +9521,7 @@ static bool ae9_acm_init(struct hda_codec *codec)
 	ae9_acm_cmd(spec, filt, sizeof(filt));		/* encoder filter window 100..500 */
 	ae9_acm_cmd(spec, tlong1, sizeof(tlong1));	/* AcmSBXLongPressMs 5000 */
 	ae9_acm_cmd(spec, cmd05, sizeof(cmd05));	/* F0 05 03 02 01 00 (Windows init) */
-	ae9_acm_cmd(spec, flag1, sizeof(flag1));	/* item id 1 flag on */
+	ae9_acm_set_fx_light(spec, ae9_fx_enabled(spec));	/* SBX light = Enable OutFX */
 	ae9_acm_cmd(spec, led, sizeof(led));		/* encoder LED on */
 	ae9_acm_display(spec, "AE-9");
 	ae9_acm_cmd(spec, blink, sizeof(blink));	/* blink interval 0 */
@@ -9572,6 +9628,11 @@ static void ae9_acm_work_fn(struct work_struct *work)
 		ae9_acm_check_regs(codec);
 	}
 	ae9_acm_knob(codec);
+	ae9_acm_service_buttons(codec);
+	if (spec->ae9_acm_pending_fx) {
+		spec->ae9_acm_pending_fx = false;
+		ae9_acm_set_fx_light(spec, ae9_fx_enabled(spec));
+	}
 	if (spec->ae9_acm_show_mode_ticks > 0) {
 		if (--spec->ae9_acm_show_mode_ticks == 0)
 			spec->ae9_acm_disp_dirty = true;

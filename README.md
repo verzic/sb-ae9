@@ -13,7 +13,8 @@ not (yet) upstream; the plan is to get it there.
 ## What works
 - Analog headphone output through the ACM (ES9038Q2M path), 48 kHz.
 - ACM: volume knob (2 detents per point, Windows curve, −90 … 0 dB), dB display,
-  headphone amp control, Windows-style keepalive.
+  headphone amp control, Windows-style keepalive; the SBX button toggles the effects and
+  its light shows their state.
 - Master volume (Windows loudness curve), PipeWire/WirePlumber integration.
 - No DSP effects by default ("Direct Mode"-like); effects can be switched on in the mixer.
 
