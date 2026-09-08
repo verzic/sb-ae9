@@ -15,9 +15,10 @@ import json,sys
 try: d=json.load(sys.stdin)
 except Exception: d=[]
 devs={o["id"] for o in d if o.get("info",{}).get("props",{}).get("device.vendor.id")=="0x1102" and o["info"]["props"].get("device.product.id")=="0x0010"}
+# the card exposes two sinks (analog + iec958/SPDIF): take the ANALOG one
 for o in d:
     p=o.get("info",{}).get("props",{})
-    if p.get("media.class")=="Audio/Sink" and p.get("device.id") in devs:
+    if p.get("media.class")=="Audio/Sink" and p.get("device.id") in devs and "analog" in p.get("node.name","") and "iec958" not in p.get("node.name",""):
         print(o["id"]); break' 2>/dev/null; }
 route_ctl() { amixer -c"$1" scontrols 2>/dev/null | grep -q "'AE-9 Output'" && echo "AE-9 Output" || echo "Output Select"; }
 apply_routing() {
