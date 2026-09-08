@@ -13,8 +13,9 @@ not (yet) upstream; the plan is to get it there.
 ## What works
 - Analog headphone output through the ACM (ES9038Q2M path), 48 kHz.
 - ACM: volume knob (2 detents per point, Windows curve, −90 … 0 dB), dB display,
-  headphone amp control, Windows-style keepalive; the SBX button toggles the effects and
-  its light shows their state.
+  headphone amp control, Windows-style keepalive. The SBX button toggles the effects and
+  its light shows their state; a short knob press mutes (display `MUTE`), a ~2 s hold
+  switches the output (`-HP-` / `-SP-`).
 - Master volume (Windows loudness curve), PipeWire/WirePlumber integration.
 - No DSP effects by default ("Direct Mode"-like); effects can be switched on in the mixer.
 
@@ -22,8 +23,6 @@ not (yet) upstream; the plan is to get it there.
 - **Rear line-out (speakers) is silent.** The SABRE9006 path is configured but no analog output yet.
 - Headphone amp gain stage (IEM / Normal / High) is not controllable yet; the module runs in
   its power-on gain. **With sensitive IEMs start low** (the defaults set about −25 dB).
-- SBX effects: occasional crackle reported with effects enabled; not yet re-tested after the
-  IOMMU fix below.
 - Bit-perfect / rate following (Windows "Direct Mode") not implemented: PipeWire resamples to 48 kHz.
 - Mic inputs, S/PDIF, suspend/resume: untested.
 
@@ -90,7 +89,10 @@ support the AE-9).
 - Output: `amixer -c<N> sset 'AE-9 Output' Headphone|Speakers` (speakers not yet audible). The
   control is deliberately not called "Output Select": the desktop's ALSA card profiles map that
   name onto sink ports and rewrite it on every route restore, flipping the ACM relay.
-- Effects: `amixer -c<N> sset 'Enable OutFX' on|off` plus the `FX:` switches.
+- Effects: `amixer -c<N> sset 'Enable OutFX' on|off` (or the SBX button). Switching on enables
+  Crystalizer, Dialog Plus, Smart Volume, X-Bass and the (flat) equalizer at Creative's stock
+  levels; each has its own `FX:` switch and level, e.g. `sset 'FX: Smart Volume' off` stops the
+  loudness leveling and `sset 'FX: X-Bass' off` (or a lower value) tames the bass.
 - ACM service off (diagnostic): `ae9_acm_poll=0` in `/etc/modprobe.d/sb-ae9.conf`.
 - Session defaults: `systemctl --user restart --no-block ae9-defaults` re-applies the analog profile,
   routing, level and default sink (the service takes up to ~45 s; `--no-block` returns at once).
