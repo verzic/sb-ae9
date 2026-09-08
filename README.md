@@ -1,14 +1,42 @@
-# sb-ae9 — Sound Blaster AE-9 on Linux
+# Sound Blaster AE-9 Linux driver — Audio Control Module, SBX effects, PipeWire
 
-Out-of-tree Linux driver support for the Creative Sound Blaster AE-9 (PCI `1102:0010`,
-dual CA0132 codecs, ES9038Q2M headphone DAC, SABRE9006 line-out DAC, external
-Audio Control Module). Based on the kernel's `snd-hda-codec-ca0132`, plus a small fix to
-the HDA core that stops the card from hard-locking the machine.
+**Sound Blaster AE-9 Linux support: 44 % of the card's features, 71 % of the Audio Control
+Module's** (support matrix below). Working today on the physical card and ACM: headphone
+output through the Audio Control Module, ACM volume knob and dB display, mute and output
+toggle from the knob, SBX button and light, SBX effects with per-effect controls, PipeWire and
+WirePlumber integration, DKMS packaging for Ubuntu and other distributions on kernel 6.17+.
+
+Out-of-tree Linux driver for the Creative Sound Blaster AE-9 sound card (PCI `1102:0010`,
+dual CA0132 HDA codecs, ES9038Q2M headphone DAC, SABRE9006 line-out DAC, external Audio
+Control Module). Based on the kernel's `snd-hda-codec-ca0132` ALSA driver, plus a small fix
+to the HDA core that stops the card from hard-locking the machine.
 
 **Status: working.** Built and running on Linux 7.0 (Ubuntu kernel 7.0.0-31-generic) with
-the physical card and ACM: headphone output through the ACM, volume knob and dB display,
-SBX button, playback under PipeWire, no issues so far. Read *Known issues* and *Hazards*
-before installing. This is not (yet) upstream; the plan is to get it there.
+the physical card and ACM, playback under PipeWire, no issues so far. Read *Known issues*
+and *Hazards* before installing. This is not (yet) upstream; the plan is to get it there.
+
+## Support matrix
+Each row weighs the same; *untested* counts as unsupported. Overall **7 of 16 rows = 44 %**,
+Audio Control Module **5 of 7 = 71 %**.
+
+| Area | Feature | Status |
+|---|---|---|
+| ACM | Headphone output through the ACM (ES9038Q2M) | **Working** |
+| ACM | Volume knob and dB display (Windows curve, −90 … 0 dB) | **Working** |
+| ACM | Mute (short knob press, `MUTE` on the display) | **Working** |
+| ACM | Output toggle (knob hold, `-HP-` / `-SP-`) | **Working** |
+| ACM | SBX button and light (effects on/off) | **Working** |
+| ACM | Headphone amp gain stage (IEM / Normal / High) | Not yet |
+| ACM | Mic / line input on the ACM (6.3 mm, XLR, 48 V phantom) | Not yet |
+| Card | Playback under PipeWire, 48 kHz, boot defaults, default sink | **Working** |
+| Card | SBX effects: master switch and per-effect switches/levels | **Working** |
+| Card | Rear line-out (SABRE9006) | Not yet |
+| Card | Optical S/PDIF out | Untested |
+| Card | Rear line-in / mic-in | Untested |
+| Card | Optical S/PDIF in | Untested |
+| Card | Mic effects (CrystalVoice) | Untested |
+| Card | Direct Mode / bit-perfect, sample rates other than 48 kHz | Not yet |
+| Card | Suspend / resume | Untested |
 
 ## What works
 - **Headphone output through the ACM** (ES9038Q2M path), 48 kHz, under PipeWire.
