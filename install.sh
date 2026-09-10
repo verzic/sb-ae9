@@ -42,13 +42,17 @@ if [ "$FW" = 1 ]; then
   fi
 fi
 
-echo "== 3/5 module options + WirePlumber rule =="
+echo "== 3/5 module options + WirePlumber rules =="
 install -m 644 "$SRC/install/sb-ae9.conf" /etc/modprobe.d/sb-ae9.conf
 if [ -d /usr/share/wireplumber/main.lua.d ]; then      # WirePlumber 0.4.x
-  install -D -m 644 "$SRC/install/51-ae9-soft-mixer.lua" "$home/.config/wireplumber/main.lua.d/51-ae9-soft-mixer.lua"
+  for f in 51-ae9-soft-mixer 52-ae9-no-capture; do
+    install -D -m 644 "$SRC/install/$f.lua" "$home/.config/wireplumber/main.lua.d/$f.lua"
+  done
   chown -R "$usr:" "$home/.config/wireplumber"
 else                                                      # WirePlumber 0.5+
-  install -D -m 644 "$SRC/install/51-ae9-soft-mixer.conf" "$home/.config/wireplumber/wireplumber.conf.d/51-ae9-soft-mixer.conf"
+  for f in 51-ae9-soft-mixer 52-ae9-no-capture; do
+    install -D -m 644 "$SRC/install/$f.conf" "$home/.config/wireplumber/wireplumber.conf.d/$f.conf"
+  done
   chown -R "$usr:" "$home/.config/wireplumber"
 fi
 

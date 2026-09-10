@@ -27,14 +27,14 @@ Audio Control Module **5 of 7 = 71 %**.
 | ACM | Output toggle (knob hold, `-HP-` / `-SP-`) | **Working** |
 | ACM | SBX button and light (effects on/off) | **Working** |
 | ACM | Headphone amp gain stage (IEM / Normal / High) | Not yet |
-| ACM | Mic / line input on the ACM (6.3 mm, XLR, 48 V phantom) | Not yet |
+| ACM | Mic / line input on the ACM (6.3 mm, XLR, 48 V phantom) | Not yet (capture disabled, Hazard 4) |
 | Card | Playback under PipeWire, 48 kHz, boot defaults, default sink | **Working** |
 | Card | SBX effects: master switch and per-effect switches/levels | **Working** |
 | Card | Rear line-out (SABRE9006) | Not yet |
 | Card | Optical S/PDIF out | Untested |
-| Card | Rear line-in / mic-in | Untested |
+| Card | Rear line-in / mic-in | Not yet (capture disabled, Hazard 4) |
 | Card | Optical S/PDIF in | Untested |
-| Card | Mic effects (CrystalVoice) | Untested |
+| Card | Mic effects (CrystalVoice) | Not yet (needs capture) |
 | Card | Direct Mode / bit-perfect, sample rates other than 48 kHz | Not yet |
 | Card | Suspend / resume | Untested |
 
@@ -67,7 +67,8 @@ Audio Control Module **5 of 7 = 71 %**.
   its power-on gain. **With sensitive IEMs start low** (the defaults set about −25 dB).
 - Effects run at Creative's stock levels, not your Windows SBX profile; there is no import.
 - Bit-perfect / rate following (Windows "Direct Mode") not implemented: PipeWire resamples to 48 kHz.
-- Mic inputs, S/PDIF, suspend/resume: untested.
+- **Recording from the card is disabled** (Hazard 4): the capture path is not brought up and
+  opening it hard-locks the machine. Use a USB microphone. S/PDIF, suspend/resume: untested.
 
 ## Hazards — read first
 1. **Never load an unpatched HDA stack against this card.** The stock kernel's HDA core
@@ -82,7 +83,13 @@ Audio Control Module **5 of 7 = 71 %**.
    passthrough keeps working with `iommu=pt`.
 3. **The ACM can hang** (module unresponsive to all traffic). A warm reboot does not clear it:
    power the PC fully off, wait 30 s, reseat the ACM cable, cold boot.
-4. **Do not use the diagnostic `tools/acm-tool` while the driver's ACM service is running**
+4. **Capture (recording) from the AE-9 hard-locks the machine.** The driver brings up the
+   playback path only; the first time an application opened the card's analog capture (Discord
+   falling back to "Default" input after a USB microphone was unplugged) the box froze with no
+   kernel message. The shipped WirePlumber rule `52-ae9-no-capture` hides every capture node
+   of the card so desktop applications cannot select it. Do not open the card's capture
+   devices directly with ALSA (`arecord -D hw:Creative`) either.
+5. **Do not use the diagnostic `tools/acm-tool` while the driver's ACM service is running**
    (UART collision), and never run its `acm=1/2` bring-up on a live card: the GPIO pulse
    resets both DACs. `acm=3` is the UART-only mode. See *Diagnostics*.
 
@@ -218,7 +225,7 @@ a reboot.
 A throw-away kernel module that maps the card's BAR2 and talks to the ACM UART, the GPIO
 block and the DAC I2C command engine directly. `make`, then `sudo ./poke.sh <params>`; it
 loads once, prints its log lines and unloads. **Park the driver's ACM service first** and
-read Hazard 4. Modes:
+read Hazard 5. Modes:
 - `acm=3` — UART-only bring-up (safe on a live card). Combine with:
   `acmget=<reg>` read an ACM register; `acmset=<reg>,<value>,<mask>` write bits;
   `acmtext=<up to 8 chars>` write the display; `raw=f0,22,02,01,00,f7` send one frame
@@ -258,7 +265,7 @@ For readers of `patches/0002` and `driver/ca0132/ca0132.c` (`QUIRK_AE9`):
 - `patches/0001-…` — the HDA core fix as a standalone kernel patch (upstream candidate).
 - `patches/0002-…` — the codec changes as one diff against v7.0, for review.
 - `tools/ae9-firmware-extract.sh` — firmware segment extractor; `tools/acm-tool/` — ACM/BAR2 diagnostics.
-- `install/` — modprobe drop-in, WirePlumber rule, session defaults + user service.
+- `install/` — modprobe drop-in, WirePlumber rules (soft mixer; capture disabled), session defaults + user service.
 - `docs/` — the investigation log, reverse-engineering notes for the ACM protocol and the
   Windows bring-up, and the decoded register captures the driver was derived from.
 
