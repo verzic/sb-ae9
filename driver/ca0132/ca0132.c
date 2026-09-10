@@ -27,7 +27,16 @@
  * every dropout/freeze on 2026-09-08 coincided with the live service. */
 static int ae9_acm_poll = 1;
 module_param(ae9_acm_poll, int, 0644);
-MODULE_PARM_DESC(ae9_acm_poll, "AE-9 ACM: 0 = init once and stay quiet (default), 1 = live knob/display service");
+MODULE_PARM_DESC(ae9_acm_poll, "AE-9 ACM: 1 = live knob/display/button service (default), 0 = init once and stay quiet");
+
+/* The AE-9 bring-up covers the playback path only. Starting a capture stream on
+ * either of the card's codecs hard-locks the machine (2026-09-09: an application
+ * fell back to the card's analog capture when a USB microphone was unplugged;
+ * the box froze without a kernel message). Until the capture path is brought up,
+ * no capture PCM streams are created on the AE-9 unless explicitly enabled. */
+static bool ae9_capture;
+module_param(ae9_capture, bool, 0444);
+MODULE_PARM_DESC(ae9_capture, "AE-9: expose capture (recording) streams; the capture path is not brought up and opening it hard-locks the machine (default 0)");
 #include <asm/io.h>
 #include <sound/core.h>
 #include <sound/hda_codec.h>
@@ -7564,6 +7573,12 @@ static const struct hda_pcm_stream ca0132_pcm_digital_capture = {
 	.channels_max = 2,
 };
 
+static inline bool ae9_capture_blocked(struct hda_codec *codec)
+{
+	return !ae9_capture && (codec->core.subsystem_id == 0x11020071 ||
+				codec->core.subsystem_id == 0x11020072);
+}
+
 static int ca0132_build_pcms(struct hda_codec *codec)
 {
 	struct ca0132_spec *spec = codec->spec;
@@ -7581,6 +7596,10 @@ static int ca0132_build_pcms(struct hda_codec *codec)
 	info->stream[SNDRV_PCM_STREAM_PLAYBACK].nid = spec->dacs[0];
 	info->stream[SNDRV_PCM_STREAM_PLAYBACK].channels_max =
 		spec->multiout.max_channels;
+	if (ae9_capture_blocked(codec)) {
+		codec_info(codec, "AE-9: capture streams not created (ae9_capture=0)\n");
+		goto digital;
+	}
 	info->stream[SNDRV_PCM_STREAM_CAPTURE] = ca0132_pcm_analog_capture;
 	info->stream[SNDRV_PCM_STREAM_CAPTURE].substreams = 1;
 	info->stream[SNDRV_PCM_STREAM_CAPTURE].nid = spec->adcs[0];
@@ -7603,7 +7622,8 @@ static int ca0132_build_pcms(struct hda_codec *codec)
 	info->stream[SNDRV_PCM_STREAM_CAPTURE].substreams = 1;
 	info->stream[SNDRV_PCM_STREAM_CAPTURE].nid = spec->adcs[2];
 
-	if (!spec->dig_out && !spec->dig_in)
+digital:
+	if (!spec->dig_out && !(spec->dig_in && !ae9_capture_blocked(codec)))
 		return 0;
 
 	info = snd_hda_codec_pcm_new(codec, "CA0132 Digital");
@@ -7615,7 +7635,7 @@ static int ca0132_build_pcms(struct hda_codec *codec)
 			ca0132_pcm_digital_playback;
 		info->stream[SNDRV_PCM_STREAM_PLAYBACK].nid = spec->dig_out;
 	}
-	if (spec->dig_in) {
+	if (spec->dig_in && !ae9_capture_blocked(codec)) {
 		info->stream[SNDRV_PCM_STREAM_CAPTURE] =
 			ca0132_pcm_digital_capture;
 		info->stream[SNDRV_PCM_STREAM_CAPTURE].nid = spec->dig_in;
@@ -7629,6 +7649,10 @@ static int dbpro_build_pcms(struct hda_codec *codec)
 	struct ca0132_spec *spec = codec->spec;
 	struct hda_pcm *info;
 
+	if (ae9_capture_blocked(codec)) {
+		codec_info(codec, "AE-9: capture streams not created (ae9_capture=0)\n");
+		goto digital;
+	}
 	info = snd_hda_codec_pcm_new(codec, "CA0132 Alt Analog");
 	if (!info)
 		return -ENOMEM;
@@ -7636,8 +7660,8 @@ static int dbpro_build_pcms(struct hda_codec *codec)
 	info->stream[SNDRV_PCM_STREAM_CAPTURE].substreams = 1;
 	info->stream[SNDRV_PCM_STREAM_CAPTURE].nid = spec->adcs[0];
 
-
-	if (!spec->dig_out && !spec->dig_in)
+digital:
+	if (!spec->dig_out && !(spec->dig_in && !ae9_capture_blocked(codec)))
 		return 0;
 
 	info = snd_hda_codec_pcm_new(codec, "CA0132 Digital");
@@ -7649,7 +7673,7 @@ static int dbpro_build_pcms(struct hda_codec *codec)
 			ca0132_pcm_digital_playback;
 		info->stream[SNDRV_PCM_STREAM_PLAYBACK].nid = spec->dig_out;
 	}
-	if (spec->dig_in) {
+	if (spec->dig_in && !ae9_capture_blocked(codec)) {
 		info->stream[SNDRV_PCM_STREAM_CAPTURE] =
 			ca0132_pcm_digital_capture;
 		info->stream[SNDRV_PCM_STREAM_CAPTURE].nid = spec->dig_in;

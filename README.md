@@ -214,7 +214,12 @@ dmesg | grep 'AE-9 ACM'            # knob, button and keepalive log lines
 Button events are logged as `AE-9 ACM: SBX button (146 ms) -> OutFX on`,
 `knob press (158 ms) -> mute toggle`, `knob mid press (1744 ms) -> output toggle`.
 
-### ACM service
+### Module parameters
+`ae9_capture=0` (default) keeps the driver from creating any capture stream on the card, on
+both of its codecs, because opening one hard-locks the machine (Hazard 4). It is a second
+guard behind the WirePlumber rule. Set `ae9_capture=1` in `/etc/modprobe.d/sb-ae9.conf` only
+to work on the capture path.
+
 `ae9_acm_poll=1` (default, `/etc/modprobe.d/sb-ae9.conf`) runs the ACM service: knob, display,
 buttons, Windows-style keepalive. `ae9_acm_poll=0` initialises the module once and leaves it
 alone (diagnostic baseline). It can be parked at runtime for the diagnostics tool with
