@@ -272,6 +272,25 @@ For readers of `patches/0002` and `driver/ca0132/ca0132.c` (`QUIRK_AE9`):
 - HDA core: `patches/0001` flushes posted writes in the interrupt clear path; without it the
   stock core hard-locks the machine on this controller.
 
+## Other CA0132 cards (AE-5, AE-7, Z / Zx / ZxR, Recon3D)
+These cards are supported by the stock kernel driver and do not need this package. If you
+install it anyway, the driver you get is upstream `ca0132.c` plus the AE-9 work, and that
+work was audited hunk by hunk against upstream (71 hunks): 47 are pure additions reached
+only with the AE-9 quirk, the AE-9 is added to three existing AE-5 conditions, and **three
+changes run on every CA0132 card**, all written to be behaviour-neutral:
+- every BAR2 write to the ca0113 command engine is followed by a read of the same register
+  (a posted-write flush, same bytes written);
+- command-engine transactions are serialised with a mutex (upstream relied on the callers
+  never overlapping);
+- DSP command replies are polled every 2 ms as well as being awaited as unsolicited
+  responses (upstream only slept 20 ms between checks of the unsolicited flag).
+The HDA-core fix (`patches/0001`) is generic by design. **None of this has been run on an
+AE-5 or AE-7.** The package builds on 7.0.0-31 and 7.0.0-34 and fails on 6.11 as expected
+(the 6.17 requirement). AE-7 owners: the AE-7's Audio Control Module is different hardware
+and its protocol has not been captured; the knob and button support here is AE-9 only. A
+Windows capture from an AE-7 is the only way to add it; reports and captures are welcome
+as GitHub issues, with `journalctl -k -b | grep -iE 'ca0132|AE-'` attached.
+
 ## Repository layout
 - `driver/ca0132/` — the codec driver (kernel `sound/hda/codecs/ca0132.c` + AE-9 support).
 - `driver/hda-core/` — kernel `sound/hda/core` + the posted-write fix, built as an override.
