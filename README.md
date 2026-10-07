@@ -11,8 +11,9 @@ dual CA0132 HDA codecs, ES9038Q2M headphone DAC, SABRE9006 line-out DAC, externa
 Control Module). Based on the kernel's `snd-hda-codec-ca0132` ALSA driver, plus a small fix
 to the HDA core that stops the card from hard-locking the machine.
 
-**Status: working.** Built and running on Linux 7.0 (Ubuntu kernel 7.0.0-31-generic) with
-the physical card and ACM, playback under PipeWire, no issues so far. Read *Known issues*
+**Status: working.** Built and running on Linux 7.0 (Ubuntu kernels 7.0.0-31 and 7.0.0-34,
+DKMS rebuilt the modules on the kernel update by itself) with the physical card and ACM,
+playback under PipeWire, no issues so far. Read *Known issues*
 and *Hazards* before installing. This is not (yet) upstream; the plan is to get it there.
 
 ## Support matrix
@@ -194,8 +195,7 @@ boots (the numeric index can).
   ALSA state handling keeps them across reboots (on Ubuntu `alsactl` stores at shutdown and
   restores at boot; `sudo alsactl store` saves the current combination right away). The master
   switch, Master level and routing are re-applied by `ae9-defaults` at every login regardless.
-  Not yet verified across a reboot on this card — check with `amixer -c Creative sget 'FX: X-Bass'`
-  after the first one.
+  Verified: switches turned off stayed off across several reboots and a kernel update.
 
 ### Session defaults service
 `ae9-defaults` (user service, oneshot) runs at login: waits for the AE-9, selects its analog
@@ -220,6 +220,19 @@ buttons, Windows-style keepalive. `ae9_acm_poll=0` initialises the module once a
 alone (diagnostic baseline). It can be parked at runtime for the diagnostics tool with
 `echo 0 | sudo tee /sys/module/snd_hda_codec_ca0132/parameters/ae9_acm_poll`; resuming needs
 a reboot.
+
+### No sound although everything looks right
+Symptom: playback runs (PipeWire stream active, `Master` up, ACM display works) and there is
+silence on the headphones. Check the one line that matters:
+```
+journalctl -k -b | grep -E 'overlay (readback|load failed)'
+```
+`overlay readback 0x3f3b4=04000086` is a good boot. `00000000` plus `loader-mode overlay
+load failed` means the DSP output-connect patch did not load: the DSP runs but is not wired
+to the DACs. Seen after Windows sessions and after crashes; a restart or a normal shutdown
+does not clear it because the slot stays on standby power. **Remedy: shut down, switch the
+power supply off (or pull the plug), press the power button once to drain, wait 30 s, power
+on.** Confirmed on the reference machine (silent for three days of boots, fixed by one drain).
 
 ### Diagnostics (`tools/acm-tool`)
 A throw-away kernel module that maps the card's BAR2 and talks to the ACM UART, the GPIO
