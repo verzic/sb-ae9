@@ -288,15 +288,19 @@ The HDA-core fix (`patches/0001`) is generic by design. **None of this has been 
 AE-5 or AE-7.** The package builds on 7.0.0-31 and 7.0.0-34 and fails on 6.11 as expected
 (the 6.17 requirement). AE-7 owners: the AE-7's Audio Control Module is different hardware
 and its protocol has not been captured; the knob and button support here is AE-9 only. A
-Windows capture from an AE-7 is the only way to add it; reports and captures are welcome
-as GitHub issues, with `journalctl -k -b | grep -iE 'ca0132|AE-'` attached.
+Windows capture from an AE-7 is the only way to add it. Reports and captures are welcome as
+GitHub issues: run `tools/collect-report.sh` (read-only; kernel log lines for the HDA stack,
+codec ids, module and firmware state, mixer and PipeWire view; no hostnames or usernames),
+look it over, and attach the file. The bring-up log lines are detailed enough that a report
+from a card the maintainers do not own usually says exactly where it went wrong.
 
 ## Repository layout
 - `driver/ca0132/` — the codec driver (kernel `sound/hda/codecs/ca0132.c` + AE-9 support).
 - `driver/hda-core/` — kernel `sound/hda/core` + the posted-write fix, built as an override.
 - `patches/0001-…` — the HDA core fix as a standalone kernel patch (upstream candidate).
 - `patches/0002-…` — the codec changes as one diff against v7.0, for review.
-- `tools/ae9-firmware-extract.sh` — firmware segment extractor; `tools/acm-tool/` — ACM/BAR2 diagnostics.
+- `tools/ae9-firmware-extract.sh` — firmware segment extractor; `tools/collect-report.sh` — bug-report
+  collector; `tools/acm-tool/` — ACM/BAR2 diagnostics.
 - `install/` — modprobe drop-in, WirePlumber rules (soft mixer; capture disabled), session defaults + user service.
 - `docs/` — the investigation log, reverse-engineering notes for the ACM protocol and the
   Windows bring-up, and the decoded register captures the driver was derived from.
