@@ -31,7 +31,7 @@ Audio Control Module **5 of 7 = 71 %**.
 | ACM | Mic / line input on the ACM (6.3 mm, XLR, 48 V phantom) | Not yet (capture disabled, Hazard 4) |
 | Card | Playback under PipeWire, 48 kHz, boot defaults, default sink | **Working** |
 | Card | SBX effects: master switch and per-effect switches/levels | **Working** |
-| Card | Rear line-out (SABRE9006) | Not yet |
+| Card | Rear line-out (SABRE9006) | Silent on the maintainer's card; live on a Fedora/alsa-firmware card (see Known issues) |
 | Card | Optical S/PDIF out | Untested |
 | Card | Rear line-in / mic-in | Not yet (capture disabled, Hazard 4) |
 | Card | Optical S/PDIF in | Untested |
@@ -63,7 +63,15 @@ Audio Control Module **5 of 7 = 71 %**.
   extractor for the one DSP segment that cannot be redistributed, an uninstaller.
 
 ## Known issues / not done
-- **Rear line-out (speakers) is silent.** The SABRE9006 path is configured but no analog output yet.
+- **Rear line-out (speakers).** On the maintainer's card (Ubuntu, `ctefx-desktop.bin` extracted
+  from Creative's package, overlay loaded) the rear RCA jacks stay silent in both `AE-9 Output`
+  positions. A Fedora user with `ctefx-desktop.bin` from the `alsa-firmware` package reports the
+  opposite problem: the line-out is live **at the same time** as the ACM headphones, and
+  `Speakers` only switches the headphone amp off. Nothing in the driver yet selects one output
+  and silences the other. `AE-9 Output` writes exactly one ACM register bit, the headphone amp
+  (reg 2 bit 6), which is also all Windows writes; the module's own selector bits (reg 2 bit 2,
+  reg 7 bit 0) are read-only and are only logged. If your line-out is audible, please say so in
+  an issue with `tools/collect-report.sh` output and the size and SHA-256 of your `ctefx-desktop.bin`.
 - Headphone amp gain stage (IEM / Normal / High) is not controllable yet; the module runs in
   its power-on gain. **With sensitive IEMs start low** (the defaults set about −25 dB).
 - Effects run at Creative's stock levels, not your Windows SBX profile; there is no import.
@@ -103,6 +111,13 @@ Audio Control Module **5 of 7 = 71 %**.
   /var/lib/dkms/mok.pub`, reboot, enrol) or use your distribution's DKMS signing setup.
 
 ## The firmware segment (why you need Creative's installer)
+The base DSP image `ctefx-desktop.bin` comes from `linux-firmware` on Debian/Ubuntu; on distributions
+whose `linux-firmware` does not ship it (Fedora), install the `alsa-firmware` package, which provides
+`ctefx-desktop.bin`, `ctefx.bin` and `ctefx-r3di.bin`. One Fedora report says the `alsa-firmware`
+desktop image already connects the DSP output, so playback works there even when the overlay below
+is missing (the driver still logs the missing file; the `AE-9 DSP-STATE overlay` readbacks show
+the expected values). Not verified on other cards: install the overlay anyway.
+
 The DSP needs a 432-byte program patch that only exists inside Creative's `CtxHda.sys`.
 It is Creative's code and is **not** in this repository. `tools/ae9-firmware-extract.sh`
 carves it from the driver package you are licensed to use (the `b43-fwcutter` model):
@@ -277,12 +292,35 @@ For readers of `patches/0002` and `driver/ca0132/ca0132.c` (`QUIRK_AE9`):
 - HDA core: `patches/0001` flushes posted writes in the interrupt clear path; without it the
   stock core hard-locks the machine on this controller.
 
+## Other CA0132 cards (AE-5, AE-7, Z / Zx / ZxR, Recon3D)
+These cards are supported by the stock kernel driver and do not need this package. If you
+install it anyway, the driver you get is upstream `ca0132.c` plus the AE-9 work, and that
+work was audited hunk by hunk against upstream (71 hunks): 47 are pure additions reached
+only with the AE-9 quirk, the AE-9 is added to three existing AE-5 conditions, and **three
+changes run on every CA0132 card**, all written to be behaviour-neutral:
+- every BAR2 write to the ca0113 command engine is followed by a read of the same register
+  (a posted-write flush, same bytes written);
+- command-engine transactions are serialised with a mutex (upstream relied on the callers
+  never overlapping);
+- DSP command replies are polled every 2 ms as well as being awaited as unsolicited
+  responses (upstream only slept 20 ms between checks of the unsolicited flag).
+The HDA-core fix (`patches/0001`) is generic by design. **None of this has been run on an
+AE-5 or AE-7.** The package builds on 7.0.0-31 and 7.0.0-34 and fails on 6.11 as expected
+(the 6.17 requirement). AE-7 owners: the AE-7's Audio Control Module is different hardware
+and its protocol has not been captured; the knob and button support here is AE-9 only. A
+Windows capture from an AE-7 is the only way to add it. Reports and captures are welcome as
+GitHub issues: run `tools/collect-report.sh` (read-only; kernel log lines for the HDA stack,
+codec ids, module and firmware state, mixer and PipeWire view; no hostnames or usernames),
+look it over, and attach the file. The bring-up log lines are detailed enough that a report
+from a card the maintainers do not own usually says exactly where it went wrong.
+
 ## Repository layout
 - `driver/ca0132/` — the codec driver (kernel `sound/hda/codecs/ca0132.c` + AE-9 support).
 - `driver/hda-core/` — kernel `sound/hda/core` + the posted-write fix, built as an override.
 - `patches/0001-…` — the HDA core fix as a standalone kernel patch (upstream candidate).
 - `patches/0002-…` — the codec changes as one diff against v7.0, for review.
-- `tools/ae9-firmware-extract.sh` — firmware segment extractor; `tools/acm-tool/` — ACM/BAR2 diagnostics.
+- `tools/ae9-firmware-extract.sh` — firmware segment extractor; `tools/collect-report.sh` — bug-report
+  collector; `tools/acm-tool/` — ACM/BAR2 diagnostics.
 - `install/` — modprobe drop-in, WirePlumber rules (soft mixer; capture disabled), session defaults + user service.
 - `docs/` — the investigation log, reverse-engineering notes for the ACM protocol and the
   Windows bring-up, and the decoded register captures the driver was derived from.
