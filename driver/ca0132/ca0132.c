@@ -13,6 +13,7 @@
 #include <linux/slab.h>
 #include <linux/mutex.h>
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/firmware.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
@@ -34,6 +35,13 @@ MODULE_PARM_DESC(ae9_acm_poll, "AE-9 ACM: 1 = live knob/display/button service (
  * fell back to the card's analog capture when a USB microphone was unplugged;
  * the box froze without a kernel message). Until the capture path is brought up,
  * no capture PCM streams are created on the AE-9 unless explicitly enabled. */
+/* 6.18+ renamed the unbound system workqueue; 7.x warns on the old name. */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
+#define AE9_WQ system_dfl_wq
+#else
+#define AE9_WQ system_unbound_wq
+#endif
+
 static bool ae9_capture;
 module_param(ae9_capture, bool, 0444);
 MODULE_PARM_DESC(ae9_capture, "AE-9: expose capture (recording) streams; the capture path is not brought up and opening it hard-locks the machine (default 0)");
@@ -8892,7 +8900,6 @@ static void ae9_post_dsp_finish(struct hda_codec *codec)
 	ae9_dev49_write(codec, 0x05, 0x15);
 	ae9_dev49_write(codec, 0x02, 0x15);
 	ae9_dev49_write(codec, 0x03, 0x15);
-	ae9_dev49_write(codec, 0x0a, 0x06);
 	/* headphone-mode THD table (DAC mode 3): 0x19 = 1, rest 0 */
 	ae9_dac_write(codec, 0x0d, 0x00);
 	ae9_dac_write(codec, 0x16, 0x00);
@@ -9732,9 +9739,9 @@ static void ae9_acm_work_fn(struct work_struct *work)
 out:
 	if (spec->ae9_acm_turbo > 0) {
 		spec->ae9_acm_turbo--;
-		queue_delayed_work(system_unbound_wq, &spec->ae9_acm_work, msecs_to_jiffies(50));
+		queue_delayed_work(AE9_WQ, &spec->ae9_acm_work, msecs_to_jiffies(50));
 	} else {
-		queue_delayed_work(system_unbound_wq, &spec->ae9_acm_work, msecs_to_jiffies(500));
+		queue_delayed_work(AE9_WQ, &spec->ae9_acm_work, msecs_to_jiffies(500));
 	}
 }
 
@@ -9815,7 +9822,7 @@ static void ae9_setup_defaults(struct hda_codec *codec)
 	codec_info(codec, "AE-9: converter bring-up done (capture-based, OutFX %s)\n",
 		   spec->effects_switch[PLAY_ENHANCEMENT - EFFECT_START_NID] ? "on" : "off");
 	ae9_dump_dsp_output_state(codec, "idle after bring-up");
-	queue_delayed_work(system_unbound_wq, &spec->ae9_acm_work, msecs_to_jiffies(500));
+	queue_delayed_work(AE9_WQ, &spec->ae9_acm_work, msecs_to_jiffies(500));
 }
 
 static void ae7_setup_defaults(struct hda_codec *codec)
@@ -11009,7 +11016,7 @@ static int ca0132_init(struct hda_codec *codec)
 			if (ca0132_quirk(spec) == QUIRK_SBZ)
 				sbz_dsp_startup_check(codec);
 			if (ca0132_quirk(spec) == QUIRK_AE9)
-				queue_delayed_work(system_unbound_wq, &spec->ae9_acm_work,
+				queue_delayed_work(AE9_WQ, &spec->ae9_acm_work,
 						      msecs_to_jiffies(500));
 			return 0;
 		}
