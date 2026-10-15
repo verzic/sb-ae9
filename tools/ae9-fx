@@ -1,0 +1,526 @@
+#!/usr/bin/env python3
+"""ae9-fx — GUI for the Sound Blaster AE-9.
+
+Drives the ALSA mixer elements of the card (id "Creative") through amixer:
+volume and mute, output selection, the SBX effects, the EQ and the DAC filters.
+
+Capture-side controls are deliberately absent (Enable InFX, FX: Voice Focus,
+FX: Noise Reduction, FX: Mic SVM, Capture, Mic Boost, SVM Level, What U Hear,
+VoiceFX, Wedge Angle, Input Source) — opening the capture path hard-locks the
+machine (see the sb-ae9 README), so we do not hand out a button for it.
+
+Requires python3-gobject, Gtk 4 and libadwaita (on Fedora:
+`dnf install python3-gobject gtk4 libadwaita`). Run it straight from the tree,
+or copy it somewhere on your PATH:
+
+    install -Dm755 tools/ae9-fx ~/.local/bin/ae9-fx
+
+For an entry in the application grid, drop this in
+~/.local/share/applications/ae9-fx.desktop, with Exec pointing at an absolute
+path (desktop entries do not expand $HOME):
+
+    [Desktop Entry]
+    Type=Application
+    Name=Sound Blaster AE-9
+    Comment=Volume, output, SBX effects and DAC filters for the AE-9
+    Exec=/home/YOU/.local/bin/ae9-fx
+    Icon=multimedia-volume-control
+    Terminal=false
+    Categories=AudioVideo;Audio;
+
+Run with --selftest to print what it reads from every control, without opening
+a window — the quickest way to tell an app bug from a driver state.
+"""
+
+import re
+import subprocess
+import sys
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+
+from gi.repository import Adw, GLib, Gtk  # noqa: E402
+
+APP_ID = "localhost.Ae9Fx"
+
+
+# ── ALSA ──────────────────────────────────────────────────────────────────────
+
+def find_card():
+    """The card's ALSA id. Stable across boots — the numeric index is not."""
+    try:
+        with open("/proc/asound/cards", encoding="utf-8") as fh:
+            for line in fh:
+                if "Creative" in line:
+                    m = re.search(r"\[\s*(\S+)\s*\]", line)
+                    if m:
+                        return m.group(1)
+    except OSError:
+        pass
+    return "Creative"
+
+
+CARD = find_card()
+
+
+def amixer(*args):
+    p = subprocess.run(["amixer", "-c", CARD, *args],
+                       capture_output=True, text=True)
+    if p.returncode != 0:
+        lines = (p.stderr or p.stdout).strip().splitlines()
+        raise RuntimeError(lines[-1] if lines else "amixer failed")
+    return p.stdout
+
+
+def read(name):
+    """Read one control: switch, value and (for enums) the current item."""
+    out = amixer("sget", name)
+    st = {"switch": None, "value": None, "item": None, "items": []}
+
+    m = re.search(r"Items: (.*)", out)
+    if m:
+        st["items"] = re.findall(r"'([^']*)'", m.group(1))
+    m = re.search(r"Item\d+: '([^']*)'", out)
+    if m:
+        st["item"] = m.group(1)
+    m = re.search(r"\[(on|off)\]", out)
+    if m:
+        st["switch"] = m.group(1) == "on"
+    # amixer prints "Mono: Playback 31 [..]" for a pvolume control, but a bare
+    # "Mono: 8 [7%]" for a joined volume with no direction (Bass Redirection
+    # Crossover) — hence the optional direction word.
+    m = re.search(r"(?:Mono|Front Left):\s+(?:\w+ )?(\d+)", out)
+    if m:
+        st["value"] = int(m.group(1))
+    return st
+
+
+def apply_ctl(name, value):
+    amixer("sset", name, str(value))
+
+
+def acm_selector():
+    """The ACM's selector, as the driver last reported it in the log."""
+    try:
+        p = subprocess.run(["journalctl", "-k", "-b", "--no-pager"],
+                           capture_output=True, text=True)
+    except OSError:
+        return None
+    for line in reversed(p.stdout.splitlines()):
+        m = re.search(r"module selector (\w+)", line)
+        if m:
+            return m.group(1)
+    return None
+
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+
+# (alsa name, title, description, has switch, has level, stock (switch, level))
+PROCESSORS = [
+    ("FX: Crystalizer", "Crystalizer",
+     "Restores transients: sharper attacks, brighter top, more punch",
+     True, True, (True, 65)),
+    ("FX: Dialog Plus", "Dialog Plus",
+     "Lifts the vocal / dialogue midrange",
+     True, True, (True, 50)),
+    ("FX: Smart Volume", "Smart Volume",
+     "Loudness leveler: rides the gain up in quiet passages and down in loud ones",
+     True, True, (True, 74)),
+    ("FX: X-Bass", "X-Bass",
+     "Bass enhancement below the crossover",
+     True, True, (True, 50)),
+    ("FX: Surround", "Surround",
+     "Virtual surround / stereo widening",
+     True, True, (False, 67)),
+    ("FX: Equalizer", "Equalizer",
+     "10-band EQ by preset",
+     True, False, (True, None)),
+]
+
+# The manufacturer's levels, for the reset button.
+DEFAULTS = {
+    "Master": 18,
+    "AE-9 Output": "Headphone",
+    "Enable OutFX": "on",
+    "FX: Crystalizer": ("on", 65),
+    "FX: Dialog Plus": ("on", 50),
+    "FX: Smart Volume": ("on", 74),
+    "FX: X-Bass": ("on", 50),
+    "FX: Surround": ("off", 67),
+    "FX: Equalizer": ("on", None),
+    "FX: Smart Volume Setting": "Normal",
+    "FX: X-Bass Crossover": 8,
+    "FX: Equalizer Preset": "Flat",
+}
+
+
+class Win(Adw.ApplicationWindow):
+    def __init__(self, app):
+        super().__init__(application=app)
+        self.set_title("Sound Blaster AE-9")
+        self.set_default_size(640, 840)
+
+        self.loading = False
+        self.widgets = {}        # alsa name -> {"switch"|"scale"|"combo": widget}
+        self.pending = {}        # alsa name -> GLib source id (debounce)
+
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+
+        self.stack = Adw.ViewStack()
+        header.set_title_widget(Adw.ViewSwitcher(
+            stack=self.stack, policy=Adw.ViewSwitcherPolicy.WIDE))
+
+        reload_btn = Gtk.Button(icon_name="view-refresh-symbolic")
+        reload_btn.set_tooltip_text("Re-read from the card")
+        reload_btn.connect("clicked", lambda _b: self.reload())
+        header.pack_end(reload_btn)
+
+        reset_btn = Gtk.Button(icon_name="edit-undo-symbolic")
+        reset_btn.set_tooltip_text("Reset to the manufacturer's defaults")
+        reset_btn.connect("clicked", lambda _b: self.reset())
+        header.pack_start(reset_btn)
+
+        toolbar.add_top_bar(header)
+        toolbar.set_content(self.stack)
+        self.set_content(toolbar)
+
+        for title, icon, build in (
+            ("Volume", "audio-volume-high-symbolic", self.page_level),
+            ("Output", "audio-speakers-symbolic", self.page_output),
+            ("SBX", "applications-multimedia-symbolic", self.page_fx),
+            ("DAC", "audio-card-symbolic", self.page_dac),
+        ):
+            page = Adw.PreferencesPage()
+            build(page)
+            self.stack.add_titled_with_icon(page, title, title, icon)
+
+        self.reload()
+
+    # ── helpers ───────────────────────────────────────────────────────────────
+
+    def _slot(self, name):
+        return self.widgets.setdefault(name, {})
+
+    def add_switch(self, group, name, title, subtitle=None):
+        row = Adw.SwitchRow(title=title, subtitle=subtitle)
+        row.connect("notify::active", self.on_switch, name)
+        group.add(row)
+        self._slot(name)["switch"] = row
+        return row
+
+    def add_switch_to(self, expander, name, title):
+        row = Adw.ActionRow(title=title, activatable=False)
+        sw = Gtk.Switch(valign=Gtk.Align.CENTER)
+        row.add_suffix(sw)
+        expander.add_row(row)
+
+        def on(sw, _p):
+            if self.loading:
+                return
+            self.write(name, "on" if sw.get_active() else "off")
+
+        sw.connect("notify::active", on)
+        self._slot(name)["switch"] = sw
+        return sw
+
+    def add_scale(self, group, parent, name, title, lo, hi, marks=()):
+        row = Adw.ActionRow(title=title, activatable=False)
+        scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, lo, hi, 1)
+        scale.set_draw_value(True)
+        scale.set_digits(0)
+        scale.set_value_pos(Gtk.PositionType.RIGHT)
+        scale.set_size_request(260, -1)
+        for m in marks:
+            scale.add_mark(m, Gtk.PositionType.BOTTOM, None)
+        row.add_suffix(scale)
+
+        if parent is None:
+            group.add(row)
+        else:
+            parent.add_row(row)
+
+        scale.connect("value-changed", self.on_scale, name)
+        self._slot(name)["scale"] = scale
+        return scale
+
+    def add_combo(self, group, parent, name, title, subtitle=None):
+        items = read(name)["items"]
+        row = Adw.ComboRow(title=title, subtitle=subtitle,
+                           model=Gtk.StringList.new(items))
+        row.connect("notify::selected", self.on_combo, name)
+
+        if parent is None:
+            group.add(row)
+        else:
+            parent.add_row(row)
+
+        self._slot(name)["combo"] = row
+        return row
+
+    def add_note(self, group, text, icon="dialog-information-symbolic"):
+        row = Adw.ActionRow(activatable=False)
+        lbl = Gtk.Label(label=text, wrap=True, xalign=0)
+        lbl.add_css_class("dim-label")
+        row.set_child(lbl)
+        row.add_prefix(Gtk.Image.new_from_icon_name(icon))
+        group.add(row)
+        return row
+
+    # ── pages ─────────────────────────────────────────────────────────────────
+
+    def page_level(self, page):
+        g = Adw.PreferencesGroup(
+            title="Volume",
+            description="The ACM knob changes the same setting")
+
+        self.add_switch(g, "Master", "Master",
+                        "On = sound, off = mute (a short press on the knob)")
+
+        self.add_scale(
+            g, None, "Master", "Level (0–99)", 0, 99, marks=(18, 44, 99))
+        g.add(Adw.ActionRow(
+            title="99 = 0 dB · 44 ≈ −12 dB · 18 ≈ −25 dB · default 18"))
+        page.add(g)
+
+        g2 = Adw.PreferencesGroup(title="Please note")
+        self.add_note(
+            g2,
+            "PipeWire's slider is software gain. Keep it at 100% and set the "
+            "level here — otherwise you lose resolution before the signal "
+            "reaches the DSP.")
+        self.add_note(
+            g2,
+            "The ae9-defaults service puts Master back to 18 at every login. "
+            "For another default: systemctl --user edit ae9-defaults → "
+            "Environment=AE9_LEVEL=30")
+        page.add(g2)
+
+        g3 = Adw.PreferencesGroup(title="Status")
+        self.acm_row = Adw.ActionRow(title="ACM selector", subtitle="—")
+        g3.add(self.acm_row)
+        self.add_note(
+            g3,
+            "The selector is internal to the ACM: the driver can only read it, "
+            "never move it. While it says speakers the rear line-out stays "
+            "live even when you are listening on the headphones.",
+            "dialog-warning-symbolic")
+        page.add(g3)
+
+    def page_output(self, page):
+        g = Adw.PreferencesGroup(title="Output")
+        self.add_combo(g, None, "AE-9 Output", "What you hear",
+                       "Same as holding the knob for 1.5–3 s")
+        self.add_switch(g, "HP/Speaker Auto Detect", "Headphone auto-detect")
+        page.add(g)
+
+        g2 = Adw.PreferencesGroup(
+            title="Speakers / surround",
+            description="These affect the line-out path, not the headphones")
+        self.add_combo(g2, None, "Surround Channel Config", "Channel layout")
+        self.add_switch(g2, "Full-Range Front Speakers", "Full-range front")
+        self.add_switch(g2, "Full-Range Rear Speakers", "Full-range rear")
+        self.add_switch(g2, "Bass Redirection", "Bass redirection")
+        self.add_scale(g2, None, "Bass Redirection Crossover",
+                       "Crossover (1–100)", 1, 100)
+        page.add(g2)
+
+        g3 = Adw.PreferencesGroup(title="Known limits")
+        self.add_note(
+            g3,
+            "The rear line-out (RCA) is always live while the ACM selector "
+            "says speakers — the sound comes out of the headphones and the "
+            "speakers at the same time. The driver has no way to mute it. The "
+            "only guaranteed fix is to unplug the RCA cables.",
+            "dialog-warning-symbolic")
+        self.add_note(
+            g3,
+            "The Speakers position is not a working output — it gives you the "
+            "line-out without the headphones, not a real switch.")
+        page.add(g3)
+
+    def page_fx(self, page):
+        g = Adw.PreferencesGroup(
+            title="SBX",
+            description="The ACM's SBX button — same as Enable OutFX")
+        self.add_switch(g, "Enable OutFX", "Effects",
+                        "While this is off the driver keeps every processor "
+                        "off in the DSP; the switches below only remember what "
+                        "to re-enable when it comes back on")
+        page.add(g)
+
+        self.fx_group = Adw.PreferencesGroup(title="Processors")
+        for name, title, desc, has_sw, has_lvl, _stock in PROCESSORS:
+            ex = Adw.ExpanderRow(title=title, subtitle=desc)
+            if has_sw:
+                self.add_switch_to(ex, name, "Enabled")
+            if has_lvl:
+                self.add_scale(None, ex, name, "Level (0–100)", 0, 100)
+
+            if name == "FX: Smart Volume":
+                self.add_combo(None, ex, "FX: Smart Volume Setting", "Mode")
+            elif name == "FX: X-Bass":
+                self.add_scale(None, ex, "FX: X-Bass Crossover",
+                               "Crossover (1–100)", 1, 100, marks=(8,))
+            elif name == "FX: Equalizer":
+                self.add_combo(None, ex, "FX: Equalizer Preset", "Preset")
+            self.fx_group.add(ex)
+        page.add(self.fx_group)
+
+        g3 = Adw.PreferencesGroup(title="10 EQ bands")
+        eq = Adw.ExpanderRow(title="Manual EQ",
+                             subtitle="0–48 per band; the preset sets them")
+        for i in range(10):
+            self.add_scale(None, eq, f"EQ Band{i}", f"Band {i + 1}", 0, 48)
+        g3.add(eq)
+        self.add_note(
+            g3,
+            "If a change does not seem to take, pause playback for a few "
+            "seconds and resume: some DSP settings are picked up at stream "
+            "start.")
+        page.add(g3)
+
+    def page_dac(self, page):
+        g = Adw.PreferencesGroup(title="DAC filters")
+        self.add_combo(g, None, "AE-5: Sound Filter", "Oversampling filter")
+        self.add_combo(g, None, "AE-5: Headphone Gain", "Headphone gain",
+                       "With sensitive IEMs start at Low")
+        page.add(g)
+
+        g2 = Adw.PreferencesGroup(title="Deliberately missing")
+        self.add_note(
+            g2,
+            "The capture-side controls are not here (microphone, Voice Focus, "
+            "Noise Reduction, Mic SVM, What U Hear, SVM Level, VoiceFX). "
+            "Opening the capture path hard-locks the machine — use a USB "
+            "microphone instead.", "dialog-warning-symbolic")
+        self.add_note(
+            g2,
+            "The headphone gain is not verified to do anything (it is on the "
+            "driver's open list). If it changes nothing, it is not this app.")
+        page.add(g2)
+
+    # ── handlers ──────────────────────────────────────────────────────────────
+
+    def write(self, name, value):
+        try:
+            apply_ctl(name, value)
+        except RuntimeError as exc:
+            self.toast(f"{name}: {exc}")
+            return False
+        return True
+
+    def on_switch(self, row, _param, name):
+        if self.loading:
+            return
+        self.write(name, "on" if row.get_active() else "off")
+        if name == "Enable OutFX":
+            self.fx_group.set_sensitive(row.get_active())
+
+    def on_combo(self, row, _param, name):
+        if self.loading:
+            return
+        item = row.get_selected_item()
+        if item is not None:
+            self.write(name, item.get_string())
+
+    def on_scale(self, scale, name):
+        if self.loading:
+            return
+        # debounce: dragging a slider emits dozens of events and we do not want
+        # dozens of writes going into the DSP
+        if name in self.pending:
+            GLib.source_remove(self.pending[name])
+
+        def flush():
+            self.pending.pop(name, None)
+            self.write(name, int(scale.get_value()))
+            return GLib.SOURCE_REMOVE
+
+        self.pending[name] = GLib.timeout_add(180, flush)
+
+    def toast(self, text):
+        self.add_toast(Adw.Toast(title=text, timeout=4))
+
+    # ── state ─────────────────────────────────────────────────────────────────
+
+    def reload(self):
+        self.loading = True
+        try:
+            for name, slots in self.widgets.items():
+                try:
+                    st = read(name)
+                except RuntimeError:
+                    continue
+                if "switch" in slots and st["switch"] is not None:
+                    slots["switch"].set_active(st["switch"])
+                if "scale" in slots and st["value"] is not None:
+                    slots["scale"].set_value(st["value"])
+                if "combo" in slots and st["item"] in st["items"]:
+                    slots["combo"].set_selected(st["items"].index(st["item"]))
+
+            outfx = self.widgets.get("Enable OutFX", {}).get("switch")
+            if outfx is not None:
+                self.fx_group.set_sensitive(outfx.get_active())
+
+            sel = acm_selector()
+            self.acm_row.set_subtitle(sel or "unknown (not found in the log)")
+        finally:
+            self.loading = False
+
+    def reset(self):
+        for name, want in DEFAULTS.items():
+            if isinstance(want, tuple):
+                sw, lvl = want
+                self.write(name, sw)
+                if lvl is not None:
+                    self.write(name, lvl)
+            else:
+                self.write(name, want)
+        self.reload()
+        self.toast("Reset to the manufacturer's defaults")
+
+
+class App(Adw.Application):
+    def __init__(self):
+        super().__init__(application_id=APP_ID)
+
+    def do_activate(self):
+        Win(self).present()
+
+
+def selftest():
+    """Check the parsers without opening a window."""
+    print(f"card: {CARD}")
+    names = [p[0] for p in PROCESSORS] + [
+        "Master", "AE-9 Output", "HP/Speaker Auto Detect", "Enable OutFX",
+        "Surround Channel Config", "Full-Range Front Speakers",
+        "Full-Range Rear Speakers", "Bass Redirection",
+        "Bass Redirection Crossover", "AE-5: Sound Filter",
+        "AE-5: Headphone Gain", "FX: Smart Volume Setting",
+        "FX: X-Bass Crossover", "FX: Equalizer Preset", "EQ Band0",
+    ]
+    for n in names:
+        try:
+            st = read(n)
+        except RuntimeError as exc:
+            print(f"  {n:32} ERROR {exc}")
+            continue
+        bits = []
+        if st["switch"] is not None:
+            bits.append("switch=" + ("on" if st["switch"] else "off"))
+        if st["value"] is not None:
+            bits.append(f"value={st['value']}")
+        if st["item"] is not None:
+            bits.append(f"item={st['item']!r} of {len(st['items'])}")
+        print(f"  {n:32} {' '.join(bits)}")
+    print(f"acm selector: {acm_selector()}")
+
+
+if __name__ == "__main__":
+    if "--selftest" in sys.argv:
+        selftest()
+    else:
+        App().run(sys.argv)
