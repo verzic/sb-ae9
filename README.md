@@ -17,35 +17,42 @@ playback under PipeWire, no issues so far. Read *Known issues*
 and *Hazards* before installing. This is not (yet) upstream; the plan is to get it there.
 
 ## Support matrix
-Each row weighs the same; *untested* counts as unsupported. Overall **7 of 16 rows = 44 %**,
-Audio Control Module **5 of 7 = 71 %**.
+Each row weighs the same; *untested* counts as unsupported. Overall **11 of 16 rows = 69 %**,
+Audio Control Module **6 of 7 = 86 %** (the AE-9's analog amp gain stage is exposed as a
+three-step digital DAC trim, not the separate IEM/Normal/High analog stage).
 
 | Area | Feature | Status |
 |---|---|---|
 | ACM | Headphone output through the ACM (ES9038Q2M) | **Working** |
 | ACM | Volume knob and dB display (Windows curve, −90 … 0 dB) | **Working** |
 | ACM | Mute (short knob press, `MUTE` on the display) | **Working** |
-| ACM | Output toggle (knob hold, `-HP-` / `-SP-`) | **Working** |
+| ACM | Output toggle (knob hold, `-HP-` / `-SP-`) | **Working**, and now exclusive (see below) |
 | ACM | SBX button and light (effects on/off) | **Working** |
-| ACM | Headphone amp gain stage (IEM / Normal / High) | Not yet |
+| ACM | Headphone amp gain stage (IEM / Normal / High) | **Working** as a 3-step digital DAC trim (`AE-5: Headphone Gain`); the analog amp stage is not separately exposed |
 | ACM | Mic / line input on the ACM (6.3 mm, XLR, 48 V phantom) | Not yet (capture disabled, Hazard 4) |
-| Card | Playback under PipeWire, 48 kHz, boot defaults, default sink | **Working** |
+| Card | Playback under PipeWire, boot defaults, default sink | **Working** (44.1 / 48 / 88.2 / 96 kHz) |
 | Card | SBX effects: master switch and per-effect switches/levels | **Working** |
-| Card | Rear line-out (SABRE9006) | Silent on the maintainer's card; live on a Fedora/alsa-firmware card; `AE-9 Output` now mutes the unselected DAC |
+| Card | Rear line-out (SABRE9006) | **Working** on the Fedora/alsa-firmware card; silent on the maintainer's card; `AE-9 Output` now switches exclusively |
 | Card | Optical S/PDIF out | Untested |
 | Card | Rear line-in / mic-in | Not yet (capture disabled, Hazard 4) |
 | Card | Optical S/PDIF in | Untested |
 | Card | Mic effects (CrystalVoice) | Not yet (needs capture) |
-| Card | Direct Mode / bit-perfect, sample rates other than 48 kHz | Not yet |
-| Card | Suspend / resume | Untested |
+| Card | Direct Mode / bit-perfect | Not yet; 44.1–96 kHz play through PipeWire without Direct Mode |
+| Card | Suspend / resume | **Working** (post-resume unmute hook included) |
 
 ## What works
-- **Headphone output through the ACM** (ES9038Q2M path), 48 kHz, under PipeWire.
+- **Headphone output through the ACM** (ES9038Q2M path), 44.1 / 48 / 88.2 / 96 kHz, under PipeWire.
 - **Volume knob**: clockwise = up, two detents per point, Windows' 101-point loudness curve
   (−90 … 0 dB). The ACM display shows the level in Windows' format (`-25.5`), `MUTE` while
   muted, `-HP-` / `-SP-` when the output is switched.
 - **Knob press**: short press (< 1.5 s) toggles mute; 1.5–3 s hold toggles the output
   (headphones ⇄ rear line-out); longer presses are ignored.
+- **Exclusive output switching**: `AE-9 Output` now writes the ES9038 front mute as well as the
+  ACM amp bit, so Headphone silences the rear line-out and Speakers silences the headphones.
+  Tested on a Fedora/alsa-firmware card; `ae9_out_mute=0` restores the old behaviour.
+- **Headphone gain**: `AE-5: Headphone Gain` gives the three Windows steps as a digital DAC
+  trim (Low / Medium / High; Low is audibly quieter). The analog amp stage is not separately
+  exposed.
 - **SBX button**: short press toggles the DSP effects (`Enable OutFX`); the button light shows
   the real effects state, off at boot. Presses of 5 s or more are ignored (Windows uses them
   for a display option).
@@ -56,6 +63,9 @@ Audio Control Module **5 of 7 = 71 %**.
   at 0 dB, so the knob and `Master` are the only level control.
 - **Desktop integration**: the card comes up on its analog profile by itself, PipeWire's
   default sink is the AE-9 at unity gain, and WirePlumber is kept off the hardware mixer.
+- **Suspend / resume**: the driver re-runs the AE-9 bring-up and the ACM comes back; the
+  installed `50-ae9-resume` system-sleep hook unmutes `Front` after WirePlumber's route
+  restore (which would otherwise leave the card silent with everything looking on).
 - **Stability**: the HDA-core posted-write fix (the stock kernel hard-locks on this card),
   the IOMMU requirement below, the codec held out of runtime suspend so the ACM stays alive,
   and serialized access to the card's DSP command engine.
@@ -65,19 +75,25 @@ Audio Control Module **5 of 7 = 71 %**.
 ## Known issues / not done
 - **Rear line-out (speakers).** On the maintainer's card (Ubuntu, `ctefx-desktop.bin` extracted
   from Creative's package, overlay loaded) the rear RCA jacks stay silent in both `AE-9 Output`
-  positions. A Fedora user with `ctefx-desktop.bin` from the `alsa-firmware` package reported the
-  opposite: the line-out was live **at the same time** as the ACM headphones. `AE-9 Output` now
-  mutes the DAC that is not selected (`ae9_out_mute=1`, see *Module parameters*), so the two
-  outputs no longer play together. The headphone amp bit is still all Windows writes to the ACM;
-  the module's own selector bits (reg 2 bit 2, reg 7 bit 0) are read-only and are only logged.
-  If your line-out is audible, please say so in an issue with `tools/collect-report.sh` output and
-  the size and SHA-256 of your `ctefx-desktop.bin`.
-- Headphone amp gain stage (IEM / Normal / High) is not controllable yet; the module runs in
-  its power-on gain. **With sensitive IEMs start low** (the defaults set about −25 dB).
+  positions — that is the card, not the switch. On the Fedora/alsa-firmware card the rear jacks
+  are live and are fed by the same ES9038Q2M as the ACM headphones. `AE-9 Output` now writes the
+  ES9038 front mute (reg 0x1d, the register Windows' `Front_Mute` uses): Headphone mutes the
+  line-out, Speakers keeps it live while the ACM amp bit mutes the headphones. Tested on the
+  Fedora card (2026-10-31): each position is now exclusive. `ae9_out_mute=0` restores the old
+  behaviour where both can be audible. If your line-out is silent in both positions, please say
+  so in an issue with `tools/collect-report.sh` output and the size and SHA-256 of your
+  `ctefx-desktop.bin`.
+- The `AE-5: Headphone Gain` control is a three-step digital DAC trim (Low / Medium / High; Low
+  is audibly quieter — confirmed on the Fedora card). The analog headphone-amp gain stage
+  (IEM / Normal / High) is not separately exposed; the module runs at its power-on gain.
+  **With sensitive IEMs start at Low** (the defaults set about −25 dB).
 - Effects run at Creative's stock levels, not your Windows SBX profile; there is no import.
-- Bit-perfect / rate following (Windows "Direct Mode") not implemented: PipeWire resamples to 48 kHz.
+- Bit-perfect / rate following (Windows "Direct Mode") is not implemented: 44.1 / 48 / 88.2 /
+  96 kHz play through PipeWire, but the DSP is still in the loop. 176.4 / 192 kHz are only
+  available on S/PDIF.
 - **Recording from the card is disabled** (Hazard 4): the capture path is not brought up and
-  opening it hard-locks the machine. Use a USB microphone. S/PDIF, suspend/resume: untested.
+  opening it hard-locks the machine. Use a USB microphone. S/PDIF remains untested;
+  suspend/resume works with the post-resume hook installed by `install.sh`.
 
 ## Hazards — read first
 1. **Never load an unpatched HDA stack against this card.** The stock kernel's HDA core
@@ -144,8 +160,8 @@ sudo reboot
 ```
 `install.sh` adds the DKMS module set (`sb-ae9`), extracts and installs the firmware segment
 (`--no-firmware` skips that step if it is already in place), installs the modprobe drop-in,
-the WirePlumber rule and the `ae9-defaults` user service, and warns about Secure Boot and
-`iommu=pt`. After the reboot the card comes up by itself.
+the WirePlumber rule, the `ae9-defaults` user service and the `50-ae9-resume` system-sleep
+hook, and warns about Secure Boot and `iommu=pt`. After the reboot the card comes up by itself.
 
 Check: `dmesg | grep 'AE-9'` should show `converter bring-up done` and
 `AE-9 ACM: present, firmware …, output headphone`, followed a few seconds later by
@@ -169,10 +185,15 @@ boots (the numeric index can).
   [Service]
   Environment=AE9_LEVEL=30
   ```
-  (`AE9_OUT=Speakers` selects the rear line-out instead; not yet audible, see Known issues).
+  (`AE9_OUT=Speakers` selects the rear line-out instead.)
 
 ### Output
 - `amixer -c Creative sset 'AE-9 Output' Headphone|Speakers`, or hold the knob 1.5–3 s.
+- The two positions are exclusive: Headphone writes the ES9038 front mute (reg 0x1d) so the
+  rear jacks are silent; Speakers leaves the line-out live and drops the ACM headphone-amp bit.
+  `ae9_out_mute=0` restores the old "both live" behaviour.
+- Headphone gain: `amixer -c Creative sset 'AE-5: Headphone Gain' 'Low (16-31  Ohms)'`
+  (or `Medium` / `High`). This is a digital DAC trim, not the analog IEM/Normal/High stage.
 - The control is deliberately not called "Output Select": the desktop's ALSA card profiles map
   that name onto sink ports and rewrite it on every route restore, flipping the ACM relay.
 
@@ -241,9 +262,10 @@ alone (diagnostic baseline). It can be parked at runtime for the diagnostics too
 `echo 0 | sudo tee /sys/module/snd_hda_codec_ca0132/parameters/ae9_acm_poll`; resuming needs
 a reboot.
 
-`ae9_out_mute=1` (default) mutes the DAC that is not selected when `AE-9 Output` changes:
-SABRE9006 (rear line-out) for Headphone, ES9038Q2M for Speakers. Set it to 0 in
-`/etc/modprobe.d/sb-ae9.conf` to restore the old behaviour where both outputs can be audible.
+`ae9_out_mute=1` (default) uses the ES9038 front mute (reg 0x1d) to silence the rear line-out
+while Headphone is selected; Speakers keeps the line-out live and the ACM amp bit silences the
+headphones. Set it to 0 in `/etc/modprobe.d/sb-ae9.conf` to restore the old behaviour where both
+outputs can be audible.
 
 ### No sound although everything looks right
 Symptom: playback runs (PipeWire stream active, `Master` up, ACM display works) and there is
@@ -257,6 +279,12 @@ to the DACs. Seen after Windows sessions and after crashes; a restart or a norma
 does not clear it because the slot stays on standby power. **Remedy: shut down, switch the
 power supply off (or pull the plug), press the power button once to drain, wait 30 s, power
 on.** Confirmed on the reference machine (silent for three days of boots, fixed by one drain).
+
+After a resume, check `amixer -c Creative sget Front`: WirePlumber's route restore can leave
+the `Front` switch `[off]`, which silences the card even though `Master` is on and the stream
+runs. `install.sh` installs a `50-ae9-resume` system-sleep hook that unmutes it about 20 s
+after resume; `journalctl -b | grep ae9-resume` shows whether it ran. To fix it by hand:
+`amixer -c Creative sset Front on`.
 
 ### Diagnostics (`tools/acm-tool`)
 A throw-away kernel module that maps the card's BAR2 and talks to the ACM UART, the GPIO
@@ -325,7 +353,7 @@ from a card the maintainers do not own usually says exactly where it went wrong.
 - `patches/0002-…` — the codec changes as one diff against v7.0, for review.
 - `tools/ae9-firmware-extract.sh` — firmware segment extractor; `tools/collect-report.sh` — bug-report
   collector; `tools/acm-tool/` — ACM/BAR2 diagnostics.
-- `install/` — modprobe drop-in, WirePlumber rules (soft mixer; capture disabled), session defaults + user service.
+- `install/` — modprobe drop-in, WirePlumber rules (soft mixer; capture disabled), session defaults + user service, post-resume unmute hook.
 - `docs/` — the investigation log, reverse-engineering notes for the ACM protocol and the
   Windows bring-up, and the decoded register captures the driver was derived from.
 

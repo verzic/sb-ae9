@@ -1,0 +1,10 @@
+#!/bin/sh
+# systemd-sleep hook installed by sb-ae9. On resume, schedule the AE-9 unmute
+# fix as a transient system unit, outside the sleep unit's cgroup, so it runs
+# after WirePlumber's route restore has finished.
+case "$1" in
+	post)
+		systemd-run --unit=ae9-resume-post --collect --on-active=10s \
+			/usr/local/libexec/sb-ae9/ae9-resume.sh >/dev/null 2>&1
+		;;
+esac
