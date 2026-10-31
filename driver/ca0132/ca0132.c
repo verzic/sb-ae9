@@ -53,7 +53,15 @@ MODULE_PARM_DESC(ae9_out_mute, "AE-9: mute the unselected output when switching 
 
 static bool ae9_capture;
 module_param(ae9_capture, bool, 0444);
-MODULE_PARM_DESC(ae9_capture, "AE-9: expose capture streams on the MAIN codec (DSP input); the secondary codec's standard ADC capture is always exposed and the main one hard-locks the machine (default 0)");
+MODULE_PARM_DESC(ae9_capture, "AE-9: expose capture streams on the MAIN codec (DSP input); the secondary codec's standard ADC capture is always exposed and the main one hard-locks the machine unless ae9_mic=1 too (default 0)");
+
+/* Bring up the DSP microphone path. The AE-9-specific port writes are already
+ * in ca0132_alt_dsp_initial_mic_setup(); ae9_setup_defaults grew out of the
+ * playback trace and never called it. Off by default until the capture stream
+ * is proven safe on the card. */
+static bool ae9_mic;
+module_param(ae9_mic, bool, 0444);
+MODULE_PARM_DESC(ae9_mic, "AE-9: initialise the DSP mic path (experimental, default 0)");
 #include <asm/io.h>
 #include <sound/core.h>
 #include <sound/hda_codec.h>
@@ -7599,9 +7607,10 @@ static inline bool ae9_capture_blocked(struct hda_codec *codec)
 	 * in; that path is safe and stays available. ae9_capture=1 lifts the
 	 * block on the main codec for experiments.
 	 */
-	return !ae9_capture && codec->core.subsystem_id == 0x11020071;
+	if (codec->core.subsystem_id != 0x11020071)
+		return false;
+	return !(ae9_capture && ae9_mic);
 }
-
 static int ca0132_build_pcms(struct hda_codec *codec)
 {
 	struct ca0132_spec *spec = codec->spec;
@@ -9861,12 +9870,16 @@ static void ae9_setup_defaults(struct hda_codec *codec)
 	 * all be in place before any stream runs.
 	 */
 	ae9_dsp_scp_startup(codec);		/* W1: DSP master-control "go" */
+	if (ae9_mic)
+		ca0132_alt_init_analog_mics(codec);
 	ae9_dsp_defaults(codec);		/* W2: module defaults, no streams */
 	ae9_post_dsp_d0_prepare(codec);		/* W3: pins, ACM power, DAC mute */
 	ae9_post_dsp_asi_pll_setup(codec);	/* W4: ASI/PLL, then start streams */
 	ae9_dsp_output_connect(codec);	/* W4b: module 0x37 output routing (Windows) */
 	ae9_post_dsp_dac_init(codec);		/* W5: ES9038 + SABRE registers */
 	ae9_post_dsp_finish(codec);		/* W6: LED, unmute */
+	if (ae9_mic)
+		ca0132_alt_dsp_initial_mic_setup(codec);
 
 	/* W10: effects + speaker-tuning defaults, as Windows does after unmute */
 	num_fx = OUT_EFFECTS_COUNT + IN_EFFECTS_COUNT + 1;

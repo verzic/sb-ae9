@@ -1,9 +1,10 @@
 # Sound Blaster AE-9 Linux driver — Audio Control Module, SBX effects, PipeWire
 
-**Sound Blaster AE-9 Linux support: 44 % of the card's features, 71 % of the Audio Control
+**Sound Blaster AE-9 Linux support: 75 % of the card's features, 100 % of the Audio Control
 Module's** (support matrix below). Working today on the physical card and ACM: headphone
-output through the Audio Control Module, ACM volume knob and dB display, mute and output
-toggle from the knob, SBX button and light, SBX effects with per-effect controls, PipeWire and
+output through the Audio Control Module, ACM microphone/line input, ACM volume knob and dB
+display, mute and output toggle from the knob, exclusive headphone/line-out switching, SBX
+button and light, SBX effects with per-effect controls, PipeWire and
 WirePlumber integration, DKMS packaging for Ubuntu and other distributions on kernel 6.17+.
 
 Out-of-tree Linux driver for the Creative Sound Blaster AE-9 sound card (PCI `1102:0010`,
@@ -17,9 +18,9 @@ playback under PipeWire, no issues so far. Read *Known issues*
 and *Hazards* before installing. This is not (yet) upstream; the plan is to get it there.
 
 ## Support matrix
-Each row weighs the same; *untested* counts as unsupported. Overall **11 of 16 rows = 69 %**,
-Audio Control Module **6 of 7 = 86 %** (the AE-9's analog amp gain stage is exposed as a
-three-step digital DAC trim, not the separate IEM/Normal/High analog stage).
+Each row weighs the same; *untested* counts as unsupported. Overall **12 of 16 rows = 75 %**,
+Audio Control Module **7 of 7 = 100 %** (the analog amp stage is exposed as a three-step digital
+DAC trim and the 48 V phantom still needs a control; see the notes).
 
 | Area | Feature | Status |
 |---|---|---|
@@ -29,19 +30,23 @@ three-step digital DAC trim, not the separate IEM/Normal/High analog stage).
 | ACM | Output toggle (knob hold, `-HP-` / `-SP-`) | **Working**, and now exclusive (see below) |
 | ACM | SBX button and light (effects on/off) | **Working** |
 | ACM | Headphone amp gain stage (IEM / Normal / High) | **Working** as a 3-step digital DAC trim (`AE-5: Headphone Gain`); the analog amp stage is not separately exposed |
-| ACM | Mic / line input on the ACM (6.3 mm, XLR, 48 V phantom) | Not yet (capture disabled, Hazard 4) |
+| ACM | Mic / line input on the ACM (6.3 mm, XLR, 48 V phantom) | **Working** for mic/line via the main codec's ADC; the 48 V phantom command is not exposed yet |
 | Card | Playback under PipeWire, boot defaults, default sink | **Working** (44.1 / 48 / 88.2 / 96 kHz) |
 | Card | SBX effects: master switch and per-effect switches/levels | **Working** |
 | Card | Rear line-out (SABRE9006) | **Working** on the Fedora/alsa-firmware card; silent on the maintainer's card; `AE-9 Output` now switches exclusively |
 | Card | Optical S/PDIF out | Untested |
-| Card | Rear line-in / mic-in | Not yet (capture disabled, Hazard 4) |
-| Card | Optical S/PDIF in | Untested |
-| Card | Mic effects (CrystalVoice) | Not yet (needs capture) |
+| Card | Rear line-in / mic-in | **Working**: ACM mic on capture device 0, rear line-in on device 4 |
+| Card | Optical S/PDIF in | Untested (exposed as capture device 10) |
+| Card | Mic effects (CrystalVoice) | Not yet (DSP input effects untested) |
 | Card | Direct Mode / bit-perfect | Not yet; 44.1–96 kHz play through PipeWire without Direct Mode |
 | Card | Suspend / resume | **Working** (post-resume unmute hook included) |
 
 ## What works
 - **Headphone output through the ACM** (ES9038Q2M path), 44.1 / 48 / 88.2 / 96 kHz, under PipeWire.
+- **Capture**: the ACM microphone (main-codec capture device 0) and the rear line-in
+  (secondary-codec capture device 4) work at 48 kHz, both with `arecord` and as a PipeWire
+  source. The ACM mic comes up as the default source. `ae9_capture=1 ae9_mic=1` is set by
+  `install/sb-ae9.conf`.
 - **Volume knob**: clockwise = up, two detents per point, Windows' 101-point loudness curve
   (−90 … 0 dB). The ACM display shows the level in Windows' format (`-25.5`), `MUTE` while
   muted, `-HP-` / `-SP-` when the output is switched.
@@ -91,9 +96,9 @@ three-step digital DAC trim, not the separate IEM/Normal/High analog stage).
 - Bit-perfect / rate following (Windows "Direct Mode") is not implemented: 44.1 / 48 / 88.2 /
   96 kHz play through PipeWire, but the DSP is still in the loop. 176.4 / 192 kHz are only
   available on S/PDIF.
-- **Recording from the card is disabled** (Hazard 4): the capture path is not brought up and
-  opening it hard-locks the machine. Use a USB microphone. S/PDIF remains untested;
-  suspend/resume works with the post-resume hook installed by `install.sh`.
+- Capture works for the ACM microphone and the rear line-in; What U Hear and S/PDIF in are
+  exposed but untested, and the ACM 48 V phantom command is not exposed yet. S/PDIF out
+  remains untested; suspend/resume works with the post-resume hook installed by `install.sh`.
 
 ## Hazards — read first
 1. **Never load an unpatched HDA stack against this card.** The stock kernel's HDA core
@@ -108,12 +113,12 @@ three-step digital DAC trim, not the separate IEM/Normal/High analog stage).
    passthrough keeps working with `iommu=pt`.
 3. **The ACM can hang** (module unresponsive to all traffic). A warm reboot does not clear it:
    power the PC fully off, wait 30 s, reseat the ACM cable, cold boot.
-4. **Capture (recording) from the AE-9 hard-locks the machine.** The driver brings up the
-   playback path only; the first time an application opened the card's analog capture (Discord
-   falling back to "Default" input after a USB microphone was unplugged) the box froze with no
-   kernel message. The shipped WirePlumber rule `52-ae9-no-capture` hides every capture node
-   of the card so desktop applications cannot select it. Do not open the card's capture
-   devices directly with ALSA (`arecord -D hw:Creative`) either.
+4. **Capture requires `ae9_capture=1 ae9_mic=1`.** The main codec's capture path is only safe
+   after the DSP mic init; without it, opening the main codec's capture hard-locked the machine
+   (2026-09: Discord fell back to "Default" input after a USB microphone was unplugged). The
+   shipped `install/sb-ae9.conf` sets both. With them, the ACM microphone (capture device 0) and
+   the rear line-in (device 4) were tested on the Fedora card; What U Hear and S/PDIF in are
+   exposed but untested. Setting `ae9_capture=0` removes the main codec's capture streams.
 5. **Do not use the diagnostic `tools/acm-tool` while the driver's ACM service is running**
    (UART collision), and never run its `acm=1/2` bring-up on a live card: the GPIO pulse
    resets both DACs. `acm=3` is the UART-only mode. See *Diagnostics*.
@@ -197,6 +202,14 @@ boots (the numeric index can).
 - The control is deliberately not called "Output Select": the desktop's ALSA card profiles map
   that name onto sink ports and rewrite it on every route restore, flipping the ACM relay.
 
+### Capture
+- ACM microphone (main codec): `arecord -D hw:Creative,0 -f S32_LE -r 48000 -c 2 -d 5 mic.wav`
+- Rear line-in (secondary codec): `arecord -D hw:Creative,4 -f S32_LE -r 48000 -c 2 -d 5 line.wav`
+- Under PipeWire the ACM mic appears as the default source; `pw-record test.wav` records from it.
+  Select it in GNOME's Sound panel or with `wpctl set-default <source-id>`.
+- Tested at 48 kHz. The ACM 48 V phantom command is not exposed yet (dynamic mics work);
+  What U Hear (device 2) and S/PDIF in (device 10) are exposed but untested.
+
 ### Effects (SBX)
 - Master switch: the SBX button, or `amixer -c Creative sset 'Enable OutFX' on|off`. The
   button light follows the real state. It is **off at every login** (the defaults service
@@ -251,10 +264,11 @@ Button events are logged as `AE-9 ACM: SBX button (146 ms) -> OutFX on`,
 `knob press (158 ms) -> mute toggle`, `knob mid press (1744 ms) -> output toggle`.
 
 ### Module parameters
-`ae9_capture=0` (default) keeps the driver from creating any capture stream on the card, on
-both of its codecs, because opening one hard-locks the machine (Hazard 4). It is a second
-guard behind the WirePlumber rule. Set `ae9_capture=1` in `/etc/modprobe.d/sb-ae9.conf` only
-to work on the capture path.
+`ae9_capture=1` + `ae9_mic=1` (set by `install/sb-ae9.conf`) create the main codec's capture
+stream (the ACM microphone) and initialise the DSP microphone path. Without `ae9_mic`, opening
+the main codec's capture can hard-lock the machine (Hazard 4); the secondary codec's standard
+ADC behind the rear line-in and S/PDIF in is always exposed. Set `ae9_capture=0` in
+`/etc/modprobe.d/sb-ae9.conf` to keep the main codec closed.
 
 `ae9_acm_poll=1` (default, `/etc/modprobe.d/sb-ae9.conf`) runs the ACM service: knob, display,
 buttons, Windows-style keepalive. `ae9_acm_poll=0` initialises the module once and leaves it
@@ -353,7 +367,7 @@ from a card the maintainers do not own usually says exactly where it went wrong.
 - `patches/0002-…` — the codec changes as one diff against v7.0, for review.
 - `tools/ae9-firmware-extract.sh` — firmware segment extractor; `tools/collect-report.sh` — bug-report
   collector; `tools/acm-tool/` — ACM/BAR2 diagnostics.
-- `install/` — modprobe drop-in, WirePlumber rules (soft mixer; capture disabled), session defaults + user service, post-resume unmute hook.
+- `install/` — modprobe drop-in (capture + mic init), WirePlumber soft-mixer rule, session defaults + user service, post-resume unmute hook.
 - `docs/` — the investigation log, reverse-engineering notes for the ACM protocol and the
   Windows bring-up, and the decoded register captures the driver was derived from.
 
