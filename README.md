@@ -1,10 +1,10 @@
 # Sound Blaster AE-9 Linux driver — Audio Control Module, SBX effects, PipeWire
 
-**Sound Blaster AE-9 Linux support: 75 % of the card's features, 100 % of the Audio Control
+**Sound Blaster AE-9 Linux support: 81 % of the card's features, 100 % of the Audio Control
 Module's** (support matrix below). Working today on the physical card and ACM: headphone
 output through the Audio Control Module, ACM microphone/line input, ACM volume knob and dB
 display, mute and output toggle from the knob, exclusive headphone/line-out switching, SBX
-button and light, SBX effects with per-effect controls, PipeWire and
+button and light, SBX effects and input effects with per-effect controls, PipeWire and
 WirePlumber integration, DKMS packaging for Ubuntu and other distributions on kernel 6.17+.
 
 Out-of-tree Linux driver for the Creative Sound Blaster AE-9 sound card (PCI `1102:0010`,
@@ -18,7 +18,7 @@ playback under PipeWire, no issues so far. Read *Known issues*
 and *Hazards* before installing. This is not (yet) upstream; the plan is to get it there.
 
 ## Support matrix
-Each row weighs the same; *untested* counts as unsupported. Overall **12 of 16 rows = 75 %**,
+Each row weighs the same; *untested* counts as unsupported. Overall **13 of 16 rows = 81 %**,
 Audio Control Module **7 of 7 = 100 %** (the analog amp stage is exposed as a three-step digital
 DAC trim and the 48 V phantom still needs a control; see the notes).
 
@@ -37,7 +37,7 @@ DAC trim and the 48 V phantom still needs a control; see the notes).
 | Card | Optical S/PDIF out | Untested |
 | Card | Rear line-in / mic-in | **Working**: ACM mic on capture device 0, rear line-in on device 4 |
 | Card | Optical S/PDIF in | Untested (exposed as capture device 10) |
-| Card | Mic effects (CrystalVoice) | Not yet (DSP input effects untested) |
+| Card | Mic effects (CrystalVoice) | **Working**: `Enable InFX` + Voice Focus / Noise Reduction / Mic SVM (ON was audibly louder and processed) |
 | Card | Direct Mode / bit-perfect | Not yet; 44.1–96 kHz play through PipeWire without Direct Mode |
 | Card | Suspend / resume | **Working** (post-resume unmute hook included) |
 
@@ -47,6 +47,8 @@ DAC trim and the 48 V phantom still needs a control; see the notes).
   (secondary-codec capture device 4) work at 48 kHz, both with `arecord` and as a PipeWire
   source. The ACM mic comes up as the default source. `ae9_capture=1 ae9_mic=1` is set by
   `install/sb-ae9.conf`.
+- **Input effects**: `Enable InFX` plus `FX: Voice Focus`, `FX: Noise Reduction` and
+  `FX: Mic SVM` are live on the capture path (tested: ON was audibly louder and processed).
 - **Volume knob**: clockwise = up, two detents per point, Windows' 101-point loudness curve
   (−90 … 0 dB). The ACM display shows the level in Windows' format (`-25.5`), `MUTE` while
   muted, `-HP-` / `-SP-` when the output is switched.
