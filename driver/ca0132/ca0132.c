@@ -6190,14 +6190,31 @@ static int ae5_sound_filter_put(struct snd_kcontrol *kcontrol,
  * front microphone has no auto-detect, and we need a way to set the rear
  * as line-in
  */
+static unsigned int ca0132_input_items(struct ca0132_spec *spec)
+{
+	/*
+	 * The AE-7 and AE-9 have no front microphone. The generic CA0132
+	 * selector exposes three items; limit those cards to rear mic and
+	 * line-in so desktop UIs do not offer a silent "Front Microphone".
+	 */
+	if (ca0132_quirk(spec) == QUIRK_AE7 ||
+	    ca0132_quirk(spec) == QUIRK_AE9)
+		return 2;
+	return IN_SRC_NUM_OF_INPUTS;
+}
+
 static int ca0132_alt_input_source_info(struct snd_kcontrol *kcontrol,
 				 struct snd_ctl_elem_info *uinfo)
 {
+	struct hda_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct ca0132_spec *spec = codec->spec;
+	unsigned int items = ca0132_input_items(spec);
+
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
 	uinfo->count = 1;
-	uinfo->value.enumerated.items = IN_SRC_NUM_OF_INPUTS;
-	if (uinfo->value.enumerated.item >= IN_SRC_NUM_OF_INPUTS)
-		uinfo->value.enumerated.item = IN_SRC_NUM_OF_INPUTS - 1;
+	uinfo->value.enumerated.items = items;
+	if (uinfo->value.enumerated.item >= items)
+		uinfo->value.enumerated.item = items - 1;
 	strscpy(uinfo->value.enumerated.name,
 			in_src_str[uinfo->value.enumerated.item]);
 	return 0;
@@ -6208,8 +6225,11 @@ static int ca0132_alt_input_source_get(struct snd_kcontrol *kcontrol,
 {
 	struct hda_codec *codec = snd_kcontrol_chip(kcontrol);
 	struct ca0132_spec *spec = codec->spec;
+	unsigned int items = ca0132_input_items(spec);
 
 	ucontrol->value.enumerated.item[0] = spec->in_enum_val;
+	if (ucontrol->value.enumerated.item[0] >= items)
+		ucontrol->value.enumerated.item[0] = items - 1;
 	return 0;
 }
 
@@ -6219,14 +6239,7 @@ static int ca0132_alt_input_source_put(struct snd_kcontrol *kcontrol,
 	struct hda_codec *codec = snd_kcontrol_chip(kcontrol);
 	struct ca0132_spec *spec = codec->spec;
 	int sel = ucontrol->value.enumerated.item[0];
-	unsigned int items = IN_SRC_NUM_OF_INPUTS;
-
-	/*
-	 * The AE-7 has no front microphone, so limit items to 2: rear mic and
-	 * line-in.
-	 */
-	if (ca0132_quirk(spec) == QUIRK_AE7)
-		items = 2;
+	unsigned int items = ca0132_input_items(spec);
 
 	if (sel >= items)
 		return 0;
