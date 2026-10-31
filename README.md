@@ -35,7 +35,7 @@ DAC trim and the 48 V phantom still needs a control; see the notes).
 | Card | SBX effects: master switch and per-effect switches/levels | **Working** |
 | Card | Rear line-out (SABRE9006) | **Working** on the Fedora/alsa-firmware card; silent on the maintainer's card; `AE-9 Output` now switches exclusively |
 | Card | Optical S/PDIF out | Untested |
-| Card | Rear line-in / mic-in | **Working**: ACM mic on capture device 0, rear line-in on device 4 |
+| Card | Rear line-in / mic-in | **Working**: ACM mic on capture device 0, rear line-in on device 4, What U Hear loopback on device 2 |
 | Card | Optical S/PDIF in | Untested (exposed as capture device 10) |
 | Card | Mic effects (CrystalVoice) | **Working**: `Enable InFX` + Voice Focus / Noise Reduction / Mic SVM (ON was audibly louder and processed) |
 | Card | Direct Mode / bit-perfect | Not yet; 44.1–96 kHz play through PipeWire without Direct Mode |
@@ -43,10 +43,11 @@ DAC trim and the 48 V phantom still needs a control; see the notes).
 
 ## What works
 - **Headphone output through the ACM** (ES9038Q2M path), 44.1 / 48 / 88.2 / 96 kHz, under PipeWire.
-- **Capture**: the ACM microphone (main-codec capture device 0) and the rear line-in
-  (secondary-codec capture device 4) work at 48 kHz, both with `arecord` and as a PipeWire
-  source. The ACM mic comes up as the default source. `ae9_capture=1 ae9_mic=1` is set by
-  `install/sb-ae9.conf`.
+- **Capture**: the ACM microphone (main-codec capture device 0), the rear line-in
+  (secondary-codec capture device 4) and the What U Hear loopback (device 2) work at 48 kHz.
+  The installed PipeWire config exposes "Sound Blaster AE-9 Line In" and "Sound Blaster AE-9
+  What U Hear" as separate sources; the ACM mic remains the default source.
+  `ae9_capture=1 ae9_mic=1` is set by `install/sb-ae9.conf`.
 - **Input effects**: `Enable InFX` plus `FX: Voice Focus`, `FX: Noise Reduction` and
   `FX: Mic SVM` are live on the capture path (tested: ON was audibly louder and processed).
 - **Volume knob**: clockwise = up, two detents per point, Windows' 101-point loudness curve
@@ -98,9 +99,10 @@ DAC trim and the 48 V phantom still needs a control; see the notes).
 - Bit-perfect / rate following (Windows "Direct Mode") is not implemented: 44.1 / 48 / 88.2 /
   96 kHz play through PipeWire, but the DSP is still in the loop. 176.4 / 192 kHz are only
   available on S/PDIF.
-- Capture works for the ACM microphone and the rear line-in; What U Hear and S/PDIF in are
-  exposed but untested, and the ACM 48 V phantom command is not exposed yet. S/PDIF out
-  remains untested; suspend/resume works with the post-resume hook installed by `install.sh`.
+- Capture works for the ACM microphone, the rear line-in and the What U Hear loopback;
+  S/PDIF in is exposed but untested, and the ACM 48 V phantom command is not exposed yet.
+  S/PDIF out remains untested; suspend/resume works with the post-resume hook installed by
+  `install.sh`.
 
 ## Hazards — read first
 1. **Never load an unpatched HDA stack against this card.** The stock kernel's HDA core
@@ -118,9 +120,10 @@ DAC trim and the 48 V phantom still needs a control; see the notes).
 4. **Capture requires `ae9_capture=1 ae9_mic=1`.** The main codec's capture path is only safe
    after the DSP mic init; without it, opening the main codec's capture hard-locked the machine
    (2026-09: Discord fell back to "Default" input after a USB microphone was unplugged). The
-   shipped `install/sb-ae9.conf` sets both. With them, the ACM microphone (capture device 0) and
-   the rear line-in (device 4) were tested on the Fedora card; What U Hear and S/PDIF in are
-   exposed but untested. Setting `ae9_capture=0` removes the main codec's capture streams.
+   shipped `install/sb-ae9.conf` sets both. With them, the ACM microphone (capture device 0),
+   the rear line-in (device 4) and the What U Hear loopback (device 2) were tested on the
+   Fedora card; S/PDIF in is exposed but untested. Setting `ae9_capture=0` removes the main
+   codec's capture streams.
 5. **Do not use the diagnostic `tools/acm-tool` while the driver's ACM service is running**
    (UART collision), and never run its `acm=1/2` bring-up on a live card: the GPIO pulse
    resets both DACs. `acm=3` is the UART-only mode. See *Diagnostics*.
@@ -207,10 +210,15 @@ boots (the numeric index can).
 ### Capture
 - ACM microphone (main codec): `arecord -D hw:Creative,0 -f S32_LE -r 48000 -c 2 -d 5 mic.wav`
 - Rear line-in (secondary codec): `arecord -D hw:Creative,4 -f S32_LE -r 48000 -c 2 -d 5 line.wav`
-- Under PipeWire the ACM mic appears as the default source; `pw-record test.wav` records from it.
-  Select it in GNOME's Sound panel or with `wpctl set-default <source-id>`.
-- Tested at 48 kHz. The ACM 48 V phantom command is not exposed yet (dynamic mics work);
-  What U Hear (device 2) and S/PDIF in (device 10) are exposed but untested.
+- What U Hear (DSP loopback of playback): `arecord -D hw:Creative,2 -f S32_LE -r 48000 -c 2 -d 5 loop.wav`
+- Under PipeWire the ACM mic is the default source. `install/20-ae9-inputs.conf` also exposes
+  **"Sound Blaster AE-9 Line In"** (device 4) and **"Sound Blaster AE-9 What U Hear"**
+  (device 2) as separate sources; select them in Audacity/OBS/GNOME. In Audacity, prefer the
+  AE-9 source over the generic `default` entry, which can advertise a bogus 128-channel
+  maximum; set 1 or 2 recording channels.
+- What U Hear is the loopback of what the card is playing (tested with a 440 Hz tone at
+  −26 dBFS); S/PDIF in (device 10) is exposed but untested. The ACM 48 V phantom command is
+  not exposed yet (dynamic mics work).
 
 ### Effects (SBX)
 - Master switch: the SBX button, or `amixer -c Creative sset 'Enable OutFX' on|off`. The

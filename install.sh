@@ -43,7 +43,7 @@ if [ "$FW" = 1 ]; then
   fi
 fi
 
-echo "== 3/5 module options + WirePlumber rules =="
+echo "== 3/5 module options + WirePlumber/PipeWire rules =="
 install -m 644 "$SRC/install/sb-ae9.conf" /etc/modprobe.d/sb-ae9.conf
 if [ -d /usr/share/wireplumber/main.lua.d ]; then      # WirePlumber 0.4.x
   for f in 51-ae9-soft-mixer; do
@@ -56,6 +56,8 @@ else                                                      # WirePlumber 0.5+
   done
   chown -R "$usr:" "$home/.config/wireplumber"
 fi
+install -D -m 644 "$SRC/install/20-ae9-inputs.conf" "$home/.config/pipewire/pipewire.conf.d/20-ae9-inputs.conf"
+chown "$usr:" "$home/.config/pipewire/pipewire.conf.d/20-ae9-inputs.conf"
 
 echo "== 4/5 session defaults (user service) =="
 install -D -m 755 "$SRC/install/ae9-defaults.sh" /usr/local/libexec/sb-ae9/ae9-defaults.sh

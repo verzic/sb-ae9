@@ -9127,6 +9127,7 @@ static void ae9_dsp_defaults(struct hda_codec *codec)
 	dspio_set_uint_param(codec, 0x96, 0x3c, FLOAT_ZERO);
 	dspio_set_uint_param(codec, 0x31, 0x00, FLOAT_TWO);
 	dspio_set_uint_param(codec, 0x32, 0x00, FLOAT_TWO);
+	chipio_set_conn_rate(codec, MEM_CONNID_WUH, SR_48_000);
 }
 
 /*
