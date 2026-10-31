@@ -20,3 +20,4 @@ modules.order
 *.inf
 ae9-dsp-*overlay*.bin
 ctefx*.bin
+__pycache__/

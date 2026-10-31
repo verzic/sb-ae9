@@ -1,0 +1,1052 @@
+#!/usr/bin/env python3
+"""ae9-fx — GUI for the Sound Blaster AE-9.
+
+Drives the ALSA mixer elements of the card (id "Creative") through amixer:
+volume and mute, output selection, the SBX effects, the EQ and the DAC filters.
+The Format page reads the running PCM format and manages PipeWire's allowed
+sample rates for the card's analog output.
+
+Capture is supported by the driver: the ACM microphone and the rear line-in.
+The Capture page shows the input selector and where the sources appear; the
+capture volume and mic boost are left to PipeWire/GNOME because the simple
+mixer lookup returns an error while PipeWire owns the capture device.
+
+Requires python3-gobject, Gtk 4 and libadwaita (on Fedora:
+`dnf install python3-gobject gtk4 libadwaita`). Run it straight from the tree,
+or copy it somewhere on your PATH:
+
+    install -Dm755 tools/ae9-fx ~/.local/bin/ae9-fx
+
+For an entry in the application grid, drop this in
+~/.local/share/applications/ae9-fx.desktop, with Exec pointing at an absolute
+path (desktop entries do not expand $HOME):
+
+    [Desktop Entry]
+    Type=Application
+    Name=Sound Blaster AE-9
+    Comment=Volume, output, SBX effects and DAC filters for the AE-9
+    Exec=/home/YOU/.local/bin/ae9-fx
+    Icon=multimedia-volume-control
+    Terminal=false
+    Categories=AudioVideo;Audio;
+
+Run with --selftest to print what it reads from every control, without opening
+a window — the quickest way to tell an app bug from a driver state.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import threading
+import time
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+
+from gi.repository import Adw, GLib, Gtk  # noqa: E402
+
+APP_ID = "localhost.Ae9Fx"
+
+
+# ── ALSA ──────────────────────────────────────────────────────────────────────
+
+def find_card():
+    """The card's ALSA id. Stable across boots — the numeric index is not."""
+    try:
+        with open("/proc/asound/cards", encoding="utf-8") as fh:
+            for line in fh:
+                if "Creative" in line:
+                    m = re.search(r"\[\s*(\S+)\s*\]", line)
+                    if m:
+                        return m.group(1)
+    except OSError:
+        pass
+    return "Creative"
+
+
+CARD = find_card()
+
+
+def amixer(*args):
+    p = subprocess.run(["amixer", "-c", CARD, *args],
+                       capture_output=True, text=True)
+    if p.returncode != 0:
+        lines = (p.stderr or p.stdout).strip().splitlines()
+        raise RuntimeError(lines[-1] if lines else "amixer failed")
+    return p.stdout
+
+
+def find_numid(name):
+    """Map a control name to its card numid (works while capture is busy)."""
+    out = amixer("controls")
+    for line in out.splitlines():
+        m = re.match(r"numid=(\d+),.*name='([^']*)'", line)
+        if m and m.group(2) == name:
+            return int(m.group(1))
+    raise RuntimeError(f"control not found: {name}")
+
+
+def read_numid(name):
+    """Fallback reader for capture controls: sget fails while PipeWire owns
+    the capture device, but cget on the card always works."""
+    out = amixer("cget", f"numid={find_numid(name)}")
+    st = {"switch": None, "value": None, "item": None, "items": []}
+    st["items"] = re.findall(r"Item #\d+ '([^']*)'", out)
+    m = re.search(r":\s*values=([^\n]+)", out)
+    if not m:
+        return st
+    raw = m.group(1).strip()
+    if raw in ("on", "off"):
+        st["switch"] = raw == "on"
+        return st
+    first = raw.split(",")[0].strip()
+    try:
+        val = int(first)
+    except ValueError:
+        return st
+    st["value"] = val
+    if st["items"] and 0 <= val < len(st["items"]):
+        st["item"] = st["items"][val]
+    if "type=BOOLEAN" in out:
+        st["switch"] = bool(val)
+    return st
+
+
+def read(name):
+    """Read one control: switch, value and (for enums) the current item."""
+    try:
+        out = amixer("sget", name)
+    except RuntimeError:
+        return read_numid(name)
+    st = {"switch": None, "value": None, "item": None, "items": []}
+
+    m = re.search(r"Items: (.*)", out)
+    if m:
+        st["items"] = re.findall(r"'([^']*)'", m.group(1))
+    m = re.search(r"Item\d+: '([^']*)'", out)
+    if m:
+        st["item"] = m.group(1)
+    m = re.search(r"\[(on|off)\]", out)
+    if m:
+        st["switch"] = m.group(1) == "on"
+    # amixer prints "Mono: Playback 31 [..]" for a pvolume control, but a bare
+    # "Mono: 8 [7%]" for a joined volume with no direction (Bass Redirection
+    # Crossover) — hence the optional direction word.
+    m = re.search(r"(?:Mono|Front Left):\s+(?:\w+ )?(\d+)", out)
+    if m:
+        st["value"] = int(m.group(1))
+    return st
+
+
+def apply_ctl(name, value):
+    try:
+        amixer("sset", name, str(value))
+    except RuntimeError:
+        amixer("cset", f"numid={find_numid(name)}", str(value))
+
+
+def acm_selector():
+    """The ACM's selector, as the driver last reported it in the log."""
+    try:
+        p = subprocess.run(["journalctl", "-k", "-b", "--no-pager"],
+                           capture_output=True, text=True)
+    except OSError:
+        return None
+    for line in reversed(p.stdout.splitlines()):
+        m = re.search(r"module selector (\w+)", line)
+        if m:
+            return m.group(1)
+    return None
+
+
+# ── PipeWire ──────────────────────────────────────────────────────────────────
+
+# Where the rate policy is persisted; the Format page owns this file.
+RATE_CONF = "~/.config/pipewire/pipewire.conf.d/10-ae9-rates.conf"
+# Where the sample format is forced; applies on the next WirePlumber start.
+FORMAT_CONF = "~/.config/wireplumber/wireplumber.conf.d/53-ae9-format.conf"
+# The driver exposes exactly these two; there is no 24-bit ALSA format.
+# 20/24-bit are folded into S32LE with an MSBITS_20/MSBITS_24 subformat.
+FORMATS = [("32-bit (S32LE, incl. 24-bit)", "S32LE"),
+           ("16-bit (S16LE)", "S16LE")]
+
+
+def _pw(*args):
+    p = subprocess.run(["pw-cli", *args], capture_output=True, text=True)
+    if p.returncode != 0:
+        lines = (p.stderr or p.stdout).strip().splitlines()
+        raise RuntimeError(lines[-1] if lines else "pw-cli failed")
+    return p.stdout
+
+
+def find_sink():
+    """PipeWire node id of the AE-9 analog sink (the card also exposes S/PDIF)."""
+    try:
+        p = subprocess.run(["pw-dump"], capture_output=True, text=True)
+        data = json.loads(p.stdout or "[]")
+    except (OSError, ValueError):
+        return None
+    devs = {o["id"] for o in data
+            if o.get("info", {}).get("props", {}).get("device.vendor.id") == "0x1102"
+            and o.get("info", {}).get("props", {}).get("device.product.id") == "0x0010"}
+    for o in data:
+        pr = o.get("info", {}).get("props", {})
+        if (pr.get("media.class") == "Audio/Sink"
+                and pr.get("device.id") in devs
+                and "analog" in pr.get("node.name", "")
+                and "iec958" not in pr.get("node.name", "")):
+            return o["id"]
+    return None
+
+
+def sink_format(node):
+    """(format, channels, rate) the sink is running right now."""
+    out = _pw("enum-params", str(node), "Format")
+    fmt = re.search(r"Audio:format \(65537\).*?AudioFormat:(\w+)\)", out, re.S)
+    ch = re.search(r"Audio:channels \(65540\).*?Int (\d+)", out, re.S)
+    rate = re.search(r"Audio:rate \(65539\).*?Int (\d+)", out, re.S)
+    return (fmt.group(1) if fmt else None,
+            int(ch.group(1)) if ch else None,
+            int(rate.group(1)) if rate else None)
+
+
+def supported_rates(node):
+    """The rates the ALSA node advertises, from its EnumFormat range."""
+    out = _pw("enum-params", str(node), "EnumFormat")
+    m = re.search(r"Audio:rate \(65539\).*?Choice:[^\n]*\n((?:\s*Int \d+\n)+)",
+                  out, re.S)
+    if not m:
+        return []
+    vals = [int(v) for v in re.findall(r"Int (\d+)", m.group(1))]
+    if len(vals) < 3:
+        return vals
+    _default, lo, hi = vals[0], vals[1], vals[2]
+    # the node exposes a min/max range; keep the standard rates inside it
+    return [r for r in (32000, 44100, 48000, 88200, 96000, 176400, 192000)
+            if lo <= r <= hi]
+
+
+def _setting(key):
+    try:
+        p = subprocess.run(["pw-metadata", "-n", "settings"],
+                           capture_output=True, text=True)
+    except OSError:
+        return None
+    m = re.search(r"key:'" + re.escape(key) + r"' value:'([^']*)'", p.stdout)
+    return m.group(1) if m else None
+
+
+def allowed_rates():
+    return [int(v) for v in re.findall(r"\d+", _setting("clock.allowed-rates") or "")]
+
+
+def graph_rate():
+    m = re.search(r"\d+", _setting("clock.rate") or "")
+    return int(m.group(0)) if m else None
+
+
+def apply_allowed_rates(rates):
+    """Apply now (pw-metadata) and persist for the next PipeWire start."""
+    val = "[ " + " ".join(str(r) for r in rates) + " ]"
+    p = subprocess.run(["pw-metadata", "-n", "settings", "0",
+                        "clock.allowed-rates", val],
+                       capture_output=True, text=True)
+    if p.returncode != 0:
+        lines = (p.stderr or p.stdout).strip().splitlines()
+        raise RuntimeError(lines[-1] if lines else "pw-metadata failed")
+
+    # keep the default rate inside the allowed set, or PipeWire has to clamp it
+    default = 48000 if 48000 in rates else rates[0]
+    path = os.path.expanduser(RATE_CONF)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(
+            "# Sound Blaster AE-9: native playback rates for the analog output.\n"
+            "# Written by ae9-fx - applies at once and after every PipeWire restart.\n"
+            "# The analog PCM tops out at 96 kHz; only S/PDIF reaches 192 kHz.\n"
+            "context.properties = {\n"
+            f"    default.clock.rate          = {default}\n"
+            f"    default.clock.allowed-rates = [ {' '.join(str(r) for r in rates)} ]\n"
+            "}\n")
+
+
+def saved_format():
+    """The format forced by the WirePlumber rule, if our file is present."""
+    try:
+        with open(os.path.expanduser(FORMAT_CONF), encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return None
+    m = re.search(r'audio\.format\s*=\s*"(\w+)"', text)
+    return m.group(1) if m else None
+
+
+def write_format_conf(fmt):
+    """Persist the sample format; the ALSA node picks it up on the next start."""
+    path = os.path.expanduser(FORMAT_CONF)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(
+            "# Sound Blaster AE-9: sample format forced on the analog sink.\n"
+            "# Written by ae9-fx - takes effect after a WirePlumber restart.\n"
+            "# 24-bit is carried inside S32LE (MSBITS_24); ALSA has no separate\n"
+            "# 24-bit format for this codec.\n"
+            "monitor.alsa.rules = [\n"
+            "  {\n"
+            "    matches = [\n"
+            '      { node.name = "~alsa_output.*analog-stereo", '
+            'alsa.mixer_name = "Creative Sound Blaster AE-9" }\n'
+            "    ]\n"
+            "    actions = {\n"
+            "      update-props = {\n"
+            f'        audio.format = "{fmt}"\n'
+            "      }\n"
+            "    }\n"
+            "  }\n"
+            "]\n")
+
+
+def mixer_state():
+    """Route/level/effects as they are now, so a restart can put them back."""
+    try:
+        ctl = ("AE-9 Output" if "'AE-9 Output'" in amixer("scontrols")
+               else "Output Select")
+        route = read(ctl)["item"] or "Headphone"
+        master = read("Master")["value"] or 18
+        outfx = bool(read("Enable OutFX")["switch"])
+    except RuntimeError:
+        return "AE-9 Output", "Headphone", 18, False
+    return ctl, route, master, outfx
+
+
+def restore_routing(ctl, route, master, outfx):
+    """Undo WirePlumber's route restore, which mutes Front and moves the knob."""
+    for c in ("PCM", "Front", "Surround"):
+        try:
+            amixer("sset", c, "unmute")   # PCM is volume-only: no switch
+        except RuntimeError:
+            pass
+        amixer("sset", c, "100%")
+    amixer("sset", "Master", "unmute")
+    amixer("sset", "Master", str(master))
+    amixer("sset", ctl, route)
+    amixer("sset", "Enable OutFX", "on" if outfx else "off")
+
+
+def _restart_worker(state, done):
+    """Restart the audio stack, then restore what the route restore clobbers."""
+    ctl, route, master, outfx = state
+    try:
+        subprocess.run(["systemctl", "--user", "restart",
+                        "pipewire", "pipewire-pulse", "wireplumber"],
+                       capture_output=True, text=True, timeout=30)
+        for _ in range(40):
+            if find_sink() is not None:
+                break
+            time.sleep(0.5)
+        time.sleep(3)            # WirePlumber writes its route a few seconds late
+        restore_routing(ctl, route, master, outfx)
+        time.sleep(10)           # re-check after the late route restore
+        try:
+            if read(ctl)["item"] not in (None, route):
+                restore_routing(ctl, route, master, outfx)
+        except RuntimeError:
+            pass
+        msg = "PipeWire restarted; AE-9 routing restored"
+    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+        msg = f"restart failed: {exc}"
+    GLib.idle_add(done, msg)
+
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+
+# (alsa name, title, description, has switch, has level, stock (switch, level))
+PROCESSORS = [
+    ("FX: Crystalizer", "Crystalizer",
+     "Restores transients: sharper attacks, brighter top, more punch",
+     True, True, (True, 65)),
+    ("FX: Dialog Plus", "Dialog Plus",
+     "Lifts the vocal / dialogue midrange",
+     True, True, (True, 50)),
+    ("FX: Smart Volume", "Smart Volume",
+     "Loudness leveler: rides the gain up in quiet passages and down in loud ones",
+     True, True, (True, 74)),
+    ("FX: X-Bass", "X-Bass",
+     "Bass enhancement below the crossover",
+     True, True, (True, 50)),
+    ("FX: Surround", "Surround",
+     "Virtual surround / stereo widening",
+     True, True, (False, 67)),
+    ("FX: Equalizer", "Equalizer",
+     "10-band EQ by preset",
+     True, False, (True, None)),
+]
+
+# The manufacturer's levels, for the reset button.
+DEFAULTS = {
+    "Master": 18,
+    "AE-9 Output": "Headphone",
+    "Enable OutFX": "on",
+    "FX: Crystalizer": ("on", 65),
+    "FX: Dialog Plus": ("on", 50),
+    "FX: Smart Volume": ("on", 74),
+    "FX: X-Bass": ("on", 50),
+    "FX: Surround": ("off", 67),
+    "FX: Equalizer": ("on", None),
+    "FX: Smart Volume Setting": "Normal",
+    "FX: X-Bass Crossover": 8,
+    "FX: Equalizer Preset": "Flat",
+}
+
+
+class Win(Adw.ApplicationWindow):
+    def __init__(self, app):
+        super().__init__(application=app)
+        self.set_title("Sound Blaster AE-9")
+        self.set_default_size(980, 760)
+        self.set_size_request(720, 560)
+
+        self.loading = False
+        self.widgets = {}        # alsa name -> {"switch"|"scale"|"combo": widget}
+        self.pending = {}        # alsa name -> GLib source id (debounce)
+
+        self.stack = Adw.ViewStack()
+
+        # Sidebar with the sections, instead of a crowded tab bar.
+        sidebar_list = Gtk.ListBox()
+        sidebar_list.add_css_class("navigation-sidebar")
+        sidebar_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        sidebar_list.set_show_separators(False)
+
+        sidebar_scroll = Gtk.ScrolledWindow()
+        sidebar_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sidebar_scroll.set_child(sidebar_list)
+        sidebar_scroll.set_vexpand(True)
+
+        sidebar_toolbar = Adw.ToolbarView()
+        sidebar_header = Adw.HeaderBar()
+        sidebar_header.set_title_widget(
+            Adw.WindowTitle(title="Sound Blaster AE-9"))
+        sidebar_toolbar.add_top_bar(sidebar_header)
+        sidebar_toolbar.set_content(sidebar_scroll)
+
+        # Content header: page title plus the two global actions.
+        self.content_title = Adw.WindowTitle(title="Volume",
+                                             subtitle="Sound Blaster AE-9")
+        content_header = Adw.HeaderBar()
+        content_header.set_title_widget(self.content_title)
+
+        reload_btn = Gtk.Button(icon_name="view-refresh-symbolic")
+        reload_btn.set_tooltip_text("Re-read from the card")
+        reload_btn.connect("clicked", lambda _b: self.reload())
+        content_header.pack_end(reload_btn)
+
+        reset_btn = Gtk.Button(icon_name="edit-undo-symbolic")
+        reset_btn.set_tooltip_text("Reset to the manufacturer's defaults")
+        reset_btn.connect("clicked", lambda _b: self.reset())
+        content_header.pack_start(reset_btn)
+
+        content_toolbar = Adw.ToolbarView()
+        content_toolbar.add_top_bar(content_header)
+        content_toolbar.set_content(self.stack)
+
+        self.content_page = Adw.NavigationPage(child=content_toolbar,
+                                               title="Volume")
+        sidebar_page = Adw.NavigationPage(child=sidebar_toolbar,
+                                          title="Sections")
+        split = Adw.NavigationSplitView()
+        split.set_sidebar(sidebar_page)
+        split.set_content(self.content_page)
+        split.set_min_sidebar_width(210)
+        split.set_max_sidebar_width(260)
+        self.set_content(split)
+
+        self.page_rows = []
+        for title, icon, build in (
+            ("Volume", "audio-volume-high-symbolic", self.page_level),
+            ("Output", "audio-speakers-symbolic", self.page_output),
+            ("Format", "audio-x-generic-symbolic", self.page_format),
+            ("SBX", "applications-multimedia-symbolic", self.page_fx),
+            ("DAC", "audio-card-symbolic", self.page_dac),
+            ("Capture", "audio-input-microphone-symbolic", self.page_capture),
+        ):
+            page = Adw.PreferencesPage()
+            build(page)
+            self.stack.add_titled_with_icon(page, title, title, icon)
+
+            row = Adw.ActionRow(title=title, activatable=True)
+            row.add_prefix(Gtk.Image.new_from_icon_name(icon))
+            sidebar_list.append(row)
+            self.page_rows.append(row)
+
+        sidebar_list.connect("row-selected", self.on_page_selected)
+        sidebar_list.select_row(self.page_rows[0])
+
+        self.reload()
+
+        self._tick = GLib.timeout_add_seconds(2, self._on_tick)
+        self.connect("close-request", self._on_close)
+
+    # ── helpers ───────────────────────────────────────────────────────────────
+
+    def _slot(self, name):
+        return self.widgets.setdefault(name, {})
+
+    def add_switch(self, group, name, title, subtitle=None):
+        row = Adw.SwitchRow(title=title, subtitle=subtitle)
+        row.connect("notify::active", self.on_switch, name)
+        group.add(row)
+        self._slot(name)["switch"] = row
+        return row
+
+    def add_switch_to(self, expander, name, title):
+        row = Adw.ActionRow(title=title, activatable=False)
+        sw = Gtk.Switch(valign=Gtk.Align.CENTER)
+        row.add_suffix(sw)
+        expander.add_row(row)
+
+        def on(sw, _p):
+            if self.loading:
+                return
+            self.write(name, "on" if sw.get_active() else "off")
+
+        sw.connect("notify::active", on)
+        self._slot(name)["switch"] = sw
+        return sw
+
+    def add_scale(self, group, parent, name, title, lo, hi, marks=()):
+        row = Adw.ActionRow(title=title, activatable=False)
+        scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, lo, hi, 1)
+        scale.set_draw_value(True)
+        scale.set_digits(0)
+        scale.set_value_pos(Gtk.PositionType.RIGHT)
+        scale.set_size_request(260, -1)
+        for m in marks:
+            scale.add_mark(m, Gtk.PositionType.BOTTOM, None)
+        row.add_suffix(scale)
+
+        if parent is None:
+            group.add(row)
+        else:
+            parent.add_row(row)
+
+        scale.connect("value-changed", self.on_scale, name)
+        self._slot(name)["scale"] = scale
+        return scale
+
+    def add_combo(self, group, parent, name, title, subtitle=None):
+        items = read(name)["items"]
+        row = Adw.ComboRow(title=title, subtitle=subtitle,
+                           model=Gtk.StringList.new(items))
+        row.connect("notify::selected", self.on_combo, name)
+
+        if parent is None:
+            group.add(row)
+        else:
+            parent.add_row(row)
+
+        self._slot(name)["combo"] = row
+        return row
+
+    def add_note(self, group, text, icon="dialog-information-symbolic"):
+        row = Adw.ActionRow(activatable=False)
+        lbl = Gtk.Label(label=text, wrap=True, xalign=0)
+        lbl.add_css_class("dim-label")
+        row.set_child(lbl)
+        row.add_prefix(Gtk.Image.new_from_icon_name(icon))
+        group.add(row)
+        return row
+
+    # ── pages ─────────────────────────────────────────────────────────────────
+
+    def page_level(self, page):
+        g = Adw.PreferencesGroup(
+            title="Volume",
+            description="The ACM knob changes the same setting")
+
+        self.add_switch(g, "Master", "Master",
+                        "On = sound, off = mute (a short press on the knob)")
+
+        self.add_scale(
+            g, None, "Master", "Level (0–99)", 0, 99, marks=(18, 44, 99))
+        g.add(Adw.ActionRow(
+            title="99 = 0 dB · 44 ≈ −12 dB · 18 ≈ −25 dB · default 18"))
+        page.add(g)
+
+        g2 = Adw.PreferencesGroup(title="Please note")
+        self.add_note(
+            g2,
+            "PipeWire's slider is software gain. Keep it at 100% and set the "
+            "level here — otherwise you lose resolution before the signal "
+            "reaches the DSP.")
+        self.add_note(
+            g2,
+            "The ae9-defaults service puts Master back to 18 at every login. "
+            "For another default: systemctl --user edit ae9-defaults → "
+            "Environment=AE9_LEVEL=30")
+        page.add(g2)
+
+        g3 = Adw.PreferencesGroup(title="Status")
+        self.acm_row = Adw.ActionRow(title="ACM selector", subtitle="—")
+        g3.add(self.acm_row)
+        self.add_note(
+            g3,
+            "The selector is internal to the ACM: the driver can only read it. "
+            "AE-9 Output is a real switch: Headphone mutes the rear line-out "
+            "with the ES9038 front mute, Speakers mutes the headphones with "
+            "the ACM amp bit.",
+            "dialog-information-symbolic")
+        page.add(g3)
+
+    def page_output(self, page):
+        g = Adw.PreferencesGroup(title="Output")
+        self.add_combo(g, None, "AE-9 Output", "What you hear",
+                       "Same as holding the knob for 1.5–3 s")
+        self.add_switch(g, "HP/Speaker Auto Detect", "Headphone auto-detect")
+        page.add(g)
+
+        g2 = Adw.PreferencesGroup(
+            title="Speakers / surround",
+            description="These affect the line-out path, not the headphones")
+        self.add_combo(g2, None, "Surround Channel Config", "Channel layout")
+        self.add_switch(g2, "Full-Range Front Speakers", "Full-range front")
+        self.add_switch(g2, "Full-Range Rear Speakers", "Full-range rear")
+        self.add_switch(g2, "Bass Redirection", "Bass redirection")
+        self.add_scale(g2, None, "Bass Redirection Crossover",
+                       "Crossover (1–100)", 1, 100)
+        page.add(g2)
+
+        g3 = Adw.PreferencesGroup(title="Output switching")
+        self.add_note(
+            g3,
+            "Headphone mutes the rear line-out through the ES9038 front mute "
+            "(reg 0x1d); Speakers keeps the line-out live and drops the ACM "
+            "headphone-amp bit. Tested on the Fedora card: each position is "
+            "exclusive. If you still hear both, the driver predates the "
+            "2026-10 output-path fix.",
+            "dialog-information-symbolic")
+        self.add_note(
+            g3,
+            "The ACM's own HP/SP selector is read-only to the driver; the "
+            "driver writes the amp bit and the ES9038 front mute instead.")
+        page.add(g3)
+
+    def page_format(self, page):
+        g = Adw.PreferencesGroup(title="Running")
+        self.format_row = Adw.ActionRow(title="Format", subtitle="—")
+        self.clock_row = Adw.ActionRow(title="Graph clock", subtitle="—")
+        g.add(self.format_row)
+        g.add(self.clock_row)
+        page.add(g)
+
+        gf = Adw.PreferencesGroup(
+            title="Sample format",
+            description="Forced on the ALSA sink at the next WirePlumber start. "
+                        "24-bit has no separate ALSA format: the HDA driver "
+                        "carries it inside S32LE (MSBITS_24), so the 32-bit "
+                        "choice is also the 24-bit path. 16-bit is the only "
+                        "alternative; the graph always processes float32.")
+        self.format_combo = Adw.ComboRow(
+            title="Bits",
+            model=Gtk.StringList.new([label for label, _fmt in FORMATS]))
+        self.format_combo.connect("notify::selected", self.on_format)
+        gf.add(self.format_combo)
+        page.add(gf)
+
+        node = find_sink()
+        try:
+            rates = supported_rates(node) if node is not None else []
+        except (RuntimeError, OSError):
+            rates = []
+        if not rates:
+            rates = [44100, 48000, 88200, 96000]
+
+        g2 = Adw.PreferencesGroup(
+            title="Allowed sample rates",
+            description="Native rates for the card. A change applies at once and "
+                        "is saved for the next PipeWire start; at least one rate "
+                        "must stay on.")
+        self.rate_rows = {}
+        for r in rates:
+            row = Adw.SwitchRow(title=f"{r} Hz")
+            row.connect("notify::active", self.on_rate, r)
+            g2.add(row)
+            self.rate_rows[r] = row
+        page.add(g2)
+
+        g3 = Adw.PreferencesGroup(title="Limits")
+        self.add_note(
+            g3,
+            "The analog PCM of the AE-9 stops at 96 kHz. 176.4/192 kHz are only "
+            "available on the card's S/PDIF output.", "dialog-warning-symbolic")
+        self.add_note(
+            g3,
+            "Allowed rates are a PipeWire graph setting: they apply to every "
+            "output, not only to the AE-9.")
+        page.add(g3)
+
+        gr = Adw.PreferencesGroup(title="PipeWire")
+        row = Adw.ActionRow(title="Restart PipeWire",
+                            subtitle="Applies the saved rates and format")
+        self.restart_btn = Gtk.Button(label="Restart")
+        self.restart_btn.set_valign(Gtk.Align.CENTER)
+        self.restart_btn.connect("clicked", lambda _b: self.do_restart())
+        row.add_suffix(self.restart_btn)
+        gr.add(row)
+        self.add_note(
+            gr,
+            "Audio stops for a few seconds. The AE-9 routing and level are "
+            "restored afterwards: WirePlumber's route restore can mute Front "
+            "and move the ACM knob.")
+        page.add(gr)
+
+    def page_fx(self, page):
+        g = Adw.PreferencesGroup(
+            title="SBX",
+            description="The ACM's SBX button — same as Enable OutFX")
+        self.add_switch(g, "Enable OutFX", "Effects",
+                        "While this is off the driver keeps every processor "
+                        "off in the DSP; the switches below only remember what "
+                        "to re-enable when it comes back on")
+        page.add(g)
+
+        self.fx_group = Adw.PreferencesGroup(title="Processors")
+        for name, title, desc, has_sw, has_lvl, _stock in PROCESSORS:
+            ex = Adw.ExpanderRow(title=title, subtitle=desc)
+            if has_sw:
+                self.add_switch_to(ex, name, "Enabled")
+            if has_lvl:
+                self.add_scale(None, ex, name, "Level (0–100)", 0, 100)
+
+            if name == "FX: Smart Volume":
+                self.add_combo(None, ex, "FX: Smart Volume Setting", "Mode")
+            elif name == "FX: X-Bass":
+                self.add_scale(None, ex, "FX: X-Bass Crossover",
+                               "Crossover (1–100)", 1, 100, marks=(8,))
+            elif name == "FX: Equalizer":
+                self.add_combo(None, ex, "FX: Equalizer Preset", "Preset")
+            self.fx_group.add(ex)
+        page.add(self.fx_group)
+
+        g3 = Adw.PreferencesGroup(title="10 EQ bands")
+        eq = Adw.ExpanderRow(title="Manual EQ",
+                             subtitle="0–48 per band; the preset sets them")
+        for i in range(10):
+            self.add_scale(None, eq, f"EQ Band{i}", f"Band {i + 1}", 0, 48)
+        g3.add(eq)
+        self.add_note(
+            g3,
+            "If a change does not seem to take, pause playback for a few "
+            "seconds and resume: some DSP settings are picked up at stream "
+            "start.")
+        page.add(g3)
+
+    def page_dac(self, page):
+        g = Adw.PreferencesGroup(title="DAC filters")
+        self.add_combo(g, None, "AE-5: Sound Filter", "Oversampling filter")
+        self.add_combo(g, None, "AE-5: Headphone Gain", "Headphone gain",
+                       "DAC master trim, not the analog IEM/Normal/High stage")
+        page.add(g)
+
+        g2 = Adw.PreferencesGroup(title="About the gain control")
+        self.add_note(
+            g2,
+            "Capture is on its own page now: the ACM microphone (device 0) and "
+            "the rear line-in (device 4) work.",
+            "dialog-information-symbolic")
+        self.add_note(
+            g2,
+            "Headphone Gain writes the ES9038Q2M master-trim registers. "
+            "Confirmed on the AE-9: Low is audibly quieter than High. It is a "
+            "digital level, not the analog IEM/Normal/High amp stage. With "
+            "sensitive IEMs start at Low. If nothing changes, the driver did "
+            "not apply it.")
+        page.add(g2)
+
+    def page_capture(self, page):
+        g = Adw.PreferencesGroup(
+            title="Input",
+            description="ACM microphone on capture device 0; rear line-in on "
+                        "device 4")
+        self.add_combo(g, None, "Input Source", "ACM input",
+                       "Microphone / Line In")
+        page.add(g)
+
+        gfx = Adw.PreferencesGroup(
+            title="CrystalVoice / input effects",
+            description="Run in the DSP while a capture stream is active")
+        self.infx_master = self.add_switch(
+            gfx, "Enable InFX Capture Switch", "Enable InFX",
+            "Master switch for the input processors")
+        self.infx_rows = [
+            self.add_switch(gfx, "FX: Voice Focus Capture Switch",
+                            "Voice Focus", "Lifts speech in the mix"),
+            self.add_switch(gfx, "FX: Noise Reduction Capture Switch",
+                            "Noise Reduction", "Removes steady background noise"),
+            self.add_switch(gfx, "FX: Mic SVM Capture Switch",
+                            "Mic SVM", "Smart volume leveler for the mic"),
+        ]
+        self.add_scale(gfx, None, "SVM Level Capture Volume",
+                       "Mic SVM level (0–100)", 0, 100)
+        self.infx_rows.append(self.add_combo(
+            gfx, None, "VoiceFX Capture Switch", "VoiceFX preset",
+            "Needs Enable InFX; e.g. Male2Female, Female2Male, Robot"))
+        self.add_note(
+            gfx,
+            "VoiceFX is the voice-morph processor (Male2Female, Female2Male, "
+            "ScrappyKid, Elderly, Orc, Elf, Dwarf, AlienBrute, Robot, Marine, "
+            "Emo, DeepVoice, Munchkin, Neutral). It runs only while Enable "
+            "InFX is on.")
+        page.add(gfx)
+
+        g2 = Adw.PreferencesGroup(title="Desktop")
+        self.add_note(
+            g2,
+            "The ACM microphone is the default PipeWire source. The install "
+            "also exposes the rear line-in ('Sound Blaster AE-9 Line In') and "
+            "the DSP loopback ('Sound Blaster AE-9 What U Hear') as separate "
+            "sources for Audacity/OBS. What U Hear records what the card is "
+            "playing.")
+        self.add_note(
+            g2,
+            "In Audacity pick the AE-9 source (not the generic 'default' "
+            "device, which can show a bogus 128-channel max) and set 1 or 2 "
+            "recording channels.")
+        self.add_note(
+            g2,
+            "Capture volume and mic boost stay under PipeWire/GNOME: the "
+            "simple mixer lookup returns an error while PipeWire owns the "
+            "capture device. Use GNOME's Sound panel, or "
+            "amixer -c Creative cset numid=9 90,90 for the capture level.")
+        page.add(g2)
+
+    # ── handlers ──────────────────────────────────────────────────────────────
+
+    def write(self, name, value):
+        try:
+            apply_ctl(name, value)
+        except RuntimeError as exc:
+            self.toast(f"{name}: {exc}")
+            return False
+        return True
+
+    def on_page_selected(self, _listbox, row):
+        if row is None:
+            return
+        title = row.get_title()
+        self.stack.set_visible_child_name(title)
+        self.content_title.set_title(title)
+        self.content_page.set_title(title)
+
+    def on_switch(self, row, _param, name):
+        if self.loading:
+            return
+        self.write(name, "on" if row.get_active() else "off")
+        if name == "Enable OutFX":
+            self.fx_group.set_sensitive(row.get_active())
+        if name == "Enable InFX Capture Switch":
+            for r in getattr(self, "infx_rows", []):
+                r.set_sensitive(row.get_active())
+
+    def on_combo(self, row, _param, name):
+        if self.loading:
+            return
+        item = row.get_selected_item()
+        if item is not None:
+            self.write(name, item.get_string())
+
+    def on_format(self, row, _param):
+        if self.loading:
+            return
+        idx = row.get_selected()
+        if idx < 0 or idx >= len(FORMATS):
+            return
+        fmt = FORMATS[idx][1]
+        try:
+            write_format_conf(fmt)
+        except OSError as exc:
+            self.toast(f"format: {exc}")
+            return
+        self.toast(f"{fmt} saved — press Restart PipeWire to apply")
+
+    def do_restart(self):
+        if getattr(self, "_restarting", False):
+            return
+        self._restarting = True
+        self.restart_btn.set_sensitive(False)
+        threading.Thread(target=_restart_worker,
+                         args=(mixer_state(), self._restart_done),
+                         daemon=True).start()
+
+    def _restart_done(self, msg):
+        self._restarting = False
+        self.restart_btn.set_sensitive(True)
+        self.toast(msg)
+        self.reload()
+        return False
+
+    def on_rate(self, row, _param, rate):
+        if self.loading:
+            return
+        rates = [r for r in sorted(self.rate_rows) if self.rate_rows[r].get_active()]
+        if not rates:
+            self.toast("Keep at least one sample rate on")
+            self.loading = True
+            row.set_active(True)
+            self.loading = False
+            return
+        try:
+            apply_allowed_rates(rates)
+        except (RuntimeError, OSError) as exc:
+            self.toast(f"sample rate: {exc}")
+            return
+        self.refresh_format()
+
+    def on_scale(self, scale, name):
+        if self.loading:
+            return
+        # debounce: dragging a slider emits dozens of events and we do not want
+        # dozens of writes going into the DSP
+        if name in self.pending:
+            GLib.source_remove(self.pending[name])
+
+        def flush():
+            self.pending.pop(name, None)
+            self.write(name, int(scale.get_value()))
+            return GLib.SOURCE_REMOVE
+
+        self.pending[name] = GLib.timeout_add(180, flush)
+
+    def toast(self, text):
+        self.add_toast(Adw.Toast(title=text, timeout=4))
+
+    # ── state ─────────────────────────────────────────────────────────────────
+
+    def refresh_format(self):
+        node = find_sink()
+        if node is None:
+            self.format_row.set_subtitle("AE-9 sink not found")
+            self.clock_row.set_subtitle("—")
+            return
+        try:
+            fmt, ch, rate = sink_format(node)
+            rates = allowed_rates()
+            clock = graph_rate()
+        except (RuntimeError, OSError):
+            return
+        self.format_row.set_subtitle(
+            f"{fmt} · {ch} ch · {rate} Hz" if fmt else "idle (device suspended)")
+        allowed = " ".join(str(r) for r in rates) or "—"
+        self.clock_row.set_subtitle(f"{clock or '—'} Hz · allowed: {allowed}")
+
+    def _on_tick(self):
+        self.refresh_format()
+        return True
+
+    def _on_close(self, *_args):
+        if getattr(self, "_tick", None) is not None:
+            GLib.source_remove(self._tick)
+            self._tick = None
+        return False
+
+    def reload(self):
+        self.loading = True
+        try:
+            for name, slots in self.widgets.items():
+                try:
+                    st = read(name)
+                except RuntimeError:
+                    continue
+                if "switch" in slots and st["switch"] is not None:
+                    slots["switch"].set_active(st["switch"])
+                if "scale" in slots and st["value"] is not None:
+                    slots["scale"].set_value(st["value"])
+                if "combo" in slots and st["item"] in st["items"]:
+                    slots["combo"].set_selected(st["items"].index(st["item"]))
+
+            outfx = self.widgets.get("Enable OutFX", {}).get("switch")
+            if outfx is not None:
+                self.fx_group.set_sensitive(outfx.get_active())
+
+            infx = self.widgets.get("Enable InFX Capture Switch", {}).get("switch")
+            if infx is not None:
+                for row in getattr(self, "infx_rows", []):
+                    row.set_sensitive(infx.get_active())
+
+            sel = acm_selector()
+            self.acm_row.set_subtitle(sel or "unknown (not found in the log)")
+
+            allowed = set(allowed_rates())
+            for r, row in self.rate_rows.items():
+                row.set_active(r in allowed)
+
+            fmt = saved_format()
+            values = [v for _label, v in FORMATS]
+            if fmt in values:
+                self.format_combo.set_selected(values.index(fmt))
+            self.refresh_format()
+        finally:
+            self.loading = False
+
+    def reset(self):
+        for name, want in DEFAULTS.items():
+            if isinstance(want, tuple):
+                sw, lvl = want
+                self.write(name, sw)
+                if lvl is not None:
+                    self.write(name, lvl)
+            else:
+                self.write(name, want)
+        self.reload()
+        self.toast("Reset to the manufacturer's defaults")
+
+
+class App(Adw.Application):
+    def __init__(self):
+        super().__init__(application_id=APP_ID)
+
+    def do_activate(self):
+        Win(self).present()
+
+
+def selftest():
+    """Check the parsers without opening a window."""
+    print(f"card: {CARD}")
+    names = [p[0] for p in PROCESSORS] + [
+        "Master", "AE-9 Output", "HP/Speaker Auto Detect", "Enable OutFX",
+        "Surround Channel Config", "Full-Range Front Speakers",
+        "Full-Range Rear Speakers", "Bass Redirection",
+        "Bass Redirection Crossover", "AE-5: Sound Filter",
+        "AE-5: Headphone Gain", "FX: Smart Volume Setting",
+        "FX: X-Bass Crossover", "FX: Equalizer Preset", "EQ Band0",
+        "Input Source", "Enable InFX Capture Switch",
+        "FX: Voice Focus Capture Switch", "FX: Noise Reduction Capture Switch",
+        "FX: Mic SVM Capture Switch", "SVM Level Capture Volume",
+        "VoiceFX Capture Switch",
+    ]
+    for n in names:
+        try:
+            st = read(n)
+        except RuntimeError as exc:
+            print(f"  {n:32} ERROR {exc}")
+            continue
+        bits = []
+        if st["switch"] is not None:
+            bits.append("switch=" + ("on" if st["switch"] else "off"))
+        if st["value"] is not None:
+            bits.append(f"value={st['value']}")
+        if st["item"] is not None:
+            bits.append(f"item={st['item']!r} of {len(st['items'])}")
+        print(f"  {n:32} {' '.join(bits)}")
+    print(f"acm selector: {acm_selector()}")
+
+
+if __name__ == "__main__":
+    if "--selftest" in sys.argv:
+        selftest()
+    else:
+        App().run(sys.argv)
