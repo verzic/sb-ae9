@@ -30,6 +30,13 @@ static int ae9_acm_poll = 1;
 module_param(ae9_acm_poll, int, 0644);
 MODULE_PARM_DESC(ae9_acm_poll, "AE-9 ACM: 1 = live knob/display/button service (default), 0 = init once and stay quiet");
 
+/* Mute the DAC that is not selected so AE-9 Output is a real switch (the ACM
+ * amp bit alone leaves the SABRE line-out live). Set to 0 to restore the old
+ * behaviour where both outputs can be audible at once. */
+static bool ae9_out_mute = true;
+module_param(ae9_out_mute, bool, 0644);
+MODULE_PARM_DESC(ae9_out_mute, "AE-9: mute the unselected DAC when switching headphone/line-out (default 1)");
+
 /* The AE-9 bring-up covers the playback path only. Starting a capture stream on
  * either of the card's codecs hard-locks the machine (2026-09-09: an application
  * fell back to the card's analog capture when a USB microphone was unplugged;
@@ -9495,6 +9502,36 @@ static void ae9_acm_service_knob_press(struct hda_codec *codec)
 	}
 }
 
+/*
+ * The ACM amp bit (reg2 bit6) only enables the headphone amplifier. On this
+ * card the rear line-out is fed by the same ES9038Q2M as the headphones, so
+ * muting that DAC silences both (2026-10-31: Speakers = silence, Headphone =
+ * both jacks live). The independent line-out mute is ES9038 front mute, reg
+ * 0x1d, the same register Windows' Front_Mute (INF index 12) writes:
+ *   0x40 = frontal/line-out unmuted, 0x80 = muted.
+ * The SABRE9006 (dev 0x49) is left at its bring-up unmuted value; writing
+ * 0x0a=0x07 there does not silence the rear jacks on the Fedora card.
+ * Called whenever the ACM output mode is applied (init and every switch).
+ */
+static void ae9_apply_output_path(struct hda_codec *codec)
+{
+	struct ca0132_spec *spec = codec->spec;
+	bool hp = spec->cur_out_type == HEADPHONE_OUT;
+
+	if (ca0132_quirk(spec) != QUIRK_AE9)
+		return;
+	if (!ae9_out_mute)
+		return;
+
+	/* Both paths need the ES9038 running; only the front/line-out buffer
+	 * is muted for headphones. Speakers mute the headphone amp instead
+	 * (ACM reg2 bit6), so the DAC stays live for the rear jacks. */
+	ae9_dac_write(codec, 0x07, 0x80);		/* ES9038 unmuted */
+	ae9_dac_write(codec, 0x1d, hp ? 0x80 : 0x40);	/* front mute */
+	codec_info(codec, "AE-9 output path: %s (ES9038 unmuted, line-out %s)\n",
+		   hp ? "headphone" : "line-out", hp ? "muted" : "unmuted");
+}
+
 /* Windows writes exactly one ACM register bit for the output: reg2 bit6 (the
  * headphone amp, item 3, F0 03 03 02 <00|40> 40). reg2 bit2 / reg7 bit0
  * (items 5/6) are the module's OWN output selector and are only ever read by
@@ -9504,9 +9541,12 @@ static void ae9_acm_apply_regs(struct ca0132_spec *spec)
 	ae9_acm_setreg(spec, 0x02, spec->cur_out_type == HEADPHONE_OUT ? 0x40 : 0x00, 0x40);
 }
 
-static void ae9_acm_apply_mode(struct ca0132_spec *spec)
+static void ae9_acm_apply_mode(struct hda_codec *codec)
 {
+	struct ca0132_spec *spec = codec->spec;
+
 	ae9_acm_apply_regs(spec);
+	ae9_apply_output_path(codec);
 	ae9_acm_display(spec, spec->cur_out_type == HEADPHONE_OUT ? "-HP-" : "-SP-");
 	spec->ae9_acm_show_mode_ticks = 10;
 }
@@ -9620,7 +9660,7 @@ static bool ae9_acm_init(struct hda_codec *codec)
 	ae9_acm_cmd(spec, led, sizeof(led));		/* encoder LED on */
 	ae9_acm_display(spec, "AE-9");
 	ae9_acm_cmd(spec, blink, sizeof(blink));	/* blink interval 0 */
-	ae9_acm_apply_mode(spec);
+	ae9_acm_apply_mode(codec);
 	codec_info(codec, "AE-9 ACM: present, firmware 0x%08x, output %s\n",
 		   spec->ae9_acm_fw,
 		   spec->cur_out_type == HEADPHONE_OUT ? "headphone" : "speakers");
@@ -9718,7 +9758,7 @@ static void ae9_acm_work_fn(struct work_struct *work)
 	}
 	if (spec->ae9_acm_pending_mode) {
 		spec->ae9_acm_pending_mode = false;
-		ae9_acm_apply_mode(spec);
+		ae9_acm_apply_mode(codec);
 	} else if ((spec->ae9_acm_tick % 10) == 0) {
 		ae9_acm_check_regs(codec);
 	}

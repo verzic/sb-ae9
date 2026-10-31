@@ -31,7 +31,7 @@ Audio Control Module **5 of 7 = 71 %**.
 | ACM | Mic / line input on the ACM (6.3 mm, XLR, 48 V phantom) | Not yet (capture disabled, Hazard 4) |
 | Card | Playback under PipeWire, 48 kHz, boot defaults, default sink | **Working** |
 | Card | SBX effects: master switch and per-effect switches/levels | **Working** |
-| Card | Rear line-out (SABRE9006) | Silent on the maintainer's card; live on a Fedora/alsa-firmware card (see Known issues) |
+| Card | Rear line-out (SABRE9006) | Silent on the maintainer's card; live on a Fedora/alsa-firmware card; `AE-9 Output` now mutes the unselected DAC |
 | Card | Optical S/PDIF out | Untested |
 | Card | Rear line-in / mic-in | Not yet (capture disabled, Hazard 4) |
 | Card | Optical S/PDIF in | Untested |
@@ -65,13 +65,13 @@ Audio Control Module **5 of 7 = 71 %**.
 ## Known issues / not done
 - **Rear line-out (speakers).** On the maintainer's card (Ubuntu, `ctefx-desktop.bin` extracted
   from Creative's package, overlay loaded) the rear RCA jacks stay silent in both `AE-9 Output`
-  positions. A Fedora user with `ctefx-desktop.bin` from the `alsa-firmware` package reports the
-  opposite problem: the line-out is live **at the same time** as the ACM headphones, and
-  `Speakers` only switches the headphone amp off. Nothing in the driver yet selects one output
-  and silences the other. `AE-9 Output` writes exactly one ACM register bit, the headphone amp
-  (reg 2 bit 6), which is also all Windows writes; the module's own selector bits (reg 2 bit 2,
-  reg 7 bit 0) are read-only and are only logged. If your line-out is audible, please say so in
-  an issue with `tools/collect-report.sh` output and the size and SHA-256 of your `ctefx-desktop.bin`.
+  positions. A Fedora user with `ctefx-desktop.bin` from the `alsa-firmware` package reported the
+  opposite: the line-out was live **at the same time** as the ACM headphones. `AE-9 Output` now
+  mutes the DAC that is not selected (`ae9_out_mute=1`, see *Module parameters*), so the two
+  outputs no longer play together. The headphone amp bit is still all Windows writes to the ACM;
+  the module's own selector bits (reg 2 bit 2, reg 7 bit 0) are read-only and are only logged.
+  If your line-out is audible, please say so in an issue with `tools/collect-report.sh` output and
+  the size and SHA-256 of your `ctefx-desktop.bin`.
 - Headphone amp gain stage (IEM / Normal / High) is not controllable yet; the module runs in
   its power-on gain. **With sensitive IEMs start low** (the defaults set about −25 dB).
 - Effects run at Creative's stock levels, not your Windows SBX profile; there is no import.
@@ -240,6 +240,10 @@ buttons, Windows-style keepalive. `ae9_acm_poll=0` initialises the module once a
 alone (diagnostic baseline). It can be parked at runtime for the diagnostics tool with
 `echo 0 | sudo tee /sys/module/snd_hda_codec_ca0132/parameters/ae9_acm_poll`; resuming needs
 a reboot.
+
+`ae9_out_mute=1` (default) mutes the DAC that is not selected when `AE-9 Output` changes:
+SABRE9006 (rear line-out) for Headphone, ES9038Q2M for Speakers. Set it to 0 in
+`/etc/modprobe.d/sb-ae9.conf` to restore the old behaviour where both outputs can be audible.
 
 ### No sound although everything looks right
 Symptom: playback runs (PipeWire stream active, `Master` up, ACM display works) and there is
