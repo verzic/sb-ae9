@@ -9335,14 +9335,22 @@ static bool ae9_acm_keepalive(struct ca0132_spec *spec)
 }
 
 /* F0 11 09 <8 ASCII, NUL padded> 00 F7 : display text */
-static void ae9_acm_display(struct ca0132_spec *spec, const char *txt)
+static void ae9_acm_display_frame(struct ca0132_spec *spec, const char *txt, bool wait)
 {
 	u8 f[13] = { 0xf0, 0x11, 0x09, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xf7 };
 	int i;
 
 	for (i = 0; i < 8 && txt[i]; i++)
 		f[3 + i] = txt[i];
-	ae9_acm_cmd(spec, f, sizeof(f));
+	if (wait)
+		ae9_acm_cmd(spec, f, sizeof(f));
+	else
+		ae9_acm_tx(spec, f, sizeof(f));	/* fire and forget: volume display */
+}
+
+static void ae9_acm_display(struct ca0132_spec *spec, const char *txt)
+{
+	ae9_acm_display_frame(spec, txt, true);
 }
 
 /* 'Master Playback Volume' on the AE-9 is a virtual master whose slave is
@@ -9398,7 +9406,7 @@ static void ae9_acm_show_volume(struct ca0132_spec *spec)
 		snprintf(txt, sizeof(txt), "MUTE");
 	else
 		snprintf(txt, sizeof(txt), "%s%d.%d", db100 ? "-" : "", db100 / 100, (db100 % 100) / 10);
-	ae9_acm_display(spec, txt);
+	ae9_acm_display_frame(spec, txt, false);
 }
 
 /* Push the current Output Select to the ACM's analog mux (§10.6: reg2 bit2 =
@@ -9729,6 +9737,7 @@ static void ae9_acm_work_fn(struct work_struct *work)
 	struct ca0132_spec *spec = container_of(to_delayed_work(work),
 						struct ca0132_spec, ae9_acm_work);
 	struct hda_codec *codec = spec->codec;
+	bool turbo = spec->ae9_acm_turbo > 0;
 
 	ae9_gpio_cmd(spec, 0x0105);
 	if (!spec->ae9_acm_present) {
@@ -9745,26 +9754,37 @@ static void ae9_acm_work_fn(struct work_struct *work)
 	if (!ae9_acm_poll)
 		return;			/* parked at runtime via /sys/module/.../parameters */
 	spec->ae9_acm_tick++;
-	if (!ae9_acm_keepalive(spec)) {
-		if (++spec->ae9_acm_dead_ticks >= 6) {
-			codec_info(codec, "AE-9 ACM: no keepalive reply for %d ticks, re-initialising\n",
-				   spec->ae9_acm_dead_ticks);
+	/*
+	 * While the knob is moving only the knob and the display are serviced.
+	 * The keepalive is still sent every 10th tick (500 ms) so the ACM does
+	 * not consider the host gone; the button probes and register checks are
+	 * deferred, because their UART waits were what made a 50 ms turbo tick
+	 * take almost a second.
+	 */
+	if (!turbo || (spec->ae9_acm_tick % 10) == 0) {
+		if (!ae9_acm_keepalive(spec)) {
+			if (++spec->ae9_acm_dead_ticks >= 6) {
+				codec_info(codec, "AE-9 ACM: no keepalive reply for %d ticks, re-initialising\n",
+					   spec->ae9_acm_dead_ticks);
+				spec->ae9_acm_dead_ticks = 0;
+				spec->ae9_acm_present = false;
+				goto out;
+			}
+		} else {
 			spec->ae9_acm_dead_ticks = 0;
-			spec->ae9_acm_present = false;
-			goto out;
 		}
-	} else {
-		spec->ae9_acm_dead_ticks = 0;
 	}
 	if (spec->ae9_acm_pending_mode) {
 		spec->ae9_acm_pending_mode = false;
 		ae9_acm_apply_mode(codec);
-	} else if ((spec->ae9_acm_tick % 10) == 0) {
+	} else if (!turbo && (spec->ae9_acm_tick % 10) == 0) {
 		ae9_acm_check_regs(codec);
 	}
 	ae9_acm_knob(codec);
-	ae9_acm_service_buttons(codec);
-	ae9_acm_service_knob_press(codec);
+	if (!turbo) {
+		ae9_acm_service_buttons(codec);
+		ae9_acm_service_knob_press(codec);
+	}
 	if (spec->ae9_acm_pending_fx) {
 		spec->ae9_acm_pending_fx = false;
 		ae9_acm_set_fx_light(spec, ae9_fx_enabled(spec));
