@@ -30,18 +30,20 @@ static int ae9_acm_poll = 1;
 module_param(ae9_acm_poll, int, 0644);
 MODULE_PARM_DESC(ae9_acm_poll, "AE-9 ACM: 1 = live knob/display/button service (default), 0 = init once and stay quiet");
 
-/* Mute the DAC that is not selected so AE-9 Output is a real switch (the ACM
- * amp bit alone leaves the SABRE line-out live). Set to 0 to restore the old
- * behaviour where both outputs can be audible at once. */
+/* Mute the line-out that is not selected so AE-9 Output is a real switch:
+ * the ES9038 front mute (reg 0x1d) for Headphone, the ACM amp bit for
+ * Speakers. Set to 0 to restore the old behaviour where both outputs can be
+ * audible at once. */
 static bool ae9_out_mute = true;
 module_param(ae9_out_mute, bool, 0644);
-MODULE_PARM_DESC(ae9_out_mute, "AE-9: mute the unselected DAC when switching headphone/line-out (default 1)");
+MODULE_PARM_DESC(ae9_out_mute, "AE-9: mute the unselected output when switching headphone/line-out (default 1)");
 
-/* The AE-9 bring-up covers the playback path only. Starting a capture stream on
- * either of the card's codecs hard-locks the machine (2026-09-09: an application
- * fell back to the card's analog capture when a USB microphone was unplugged;
- * the box froze without a kernel message). Until the capture path is brought up,
- * no capture PCM streams are created on the AE-9 unless explicitly enabled. */
+/* The AE-9 main codec's capture path runs through the DSP and is not brought
+ * up; starting a capture stream there hard-locks the machine (2026-09-09: an
+ * application fell back to the card's analog capture when a USB microphone
+ * was unplugged; the box froze without a kernel message). The secondary codec
+ * (0x11020072) has a plain HDA ADC behind the rear line-in and S/PDIF in and
+ * is safe to expose. ae9_capture=1 lifts the block on the main codec. */
 /* 6.18+ renamed the unbound system workqueue; 7.x warns on the old name. */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 #define AE9_WQ system_dfl_wq
@@ -51,7 +53,7 @@ MODULE_PARM_DESC(ae9_out_mute, "AE-9: mute the unselected DAC when switching hea
 
 static bool ae9_capture;
 module_param(ae9_capture, bool, 0444);
-MODULE_PARM_DESC(ae9_capture, "AE-9: expose capture (recording) streams; the capture path is not brought up and opening it hard-locks the machine (default 0)");
+MODULE_PARM_DESC(ae9_capture, "AE-9: expose capture streams on the MAIN codec (DSP input); the secondary codec's standard ADC capture is always exposed and the main one hard-locks the machine (default 0)");
 #include <asm/io.h>
 #include <sound/core.h>
 #include <sound/hda_codec.h>
@@ -7590,8 +7592,14 @@ static const struct hda_pcm_stream ca0132_pcm_digital_capture = {
 
 static inline bool ae9_capture_blocked(struct hda_codec *codec)
 {
-	return !ae9_capture && (codec->core.subsystem_id == 0x11020071 ||
-				codec->core.subsystem_id == 0x11020072);
+	/*
+	 * The AE-9 main codec (0x11020071) routes capture through the DSP and
+	 * opening it hard-locks the machine (2026-09). The secondary codec
+	 * (0x11020072) has a plain HDA ADC behind the rear line-in and S/PDIF
+	 * in; that path is safe and stays available. ae9_capture=1 lifts the
+	 * block on the main codec for experiments.
+	 */
+	return !ae9_capture && codec->core.subsystem_id == 0x11020071;
 }
 
 static int ca0132_build_pcms(struct hda_codec *codec)
