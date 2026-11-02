@@ -31,18 +31,18 @@ DAC trim and the 48 V phantom still needs a control; see the notes).
 | ACM | SBX button and light (effects on/off) | **Working** |
 | ACM | Headphone amp gain stage (IEM / Normal / High) | **Working** as a 3-step digital DAC trim (`AE-5: Headphone Gain`); the analog amp stage is not separately exposed |
 | ACM | Mic / line input on the ACM (6.3 mm, XLR, 48 V phantom) | **Working** for mic/line via the main codec's ADC; the 48 V phantom command is not exposed yet |
-| Card | Playback under PipeWire, boot defaults, default sink | **Working** (44.1 / 48 / 88.2 / 96 kHz) |
+| Card | Playback under PipeWire, boot defaults, default sink | **Working** (44.1 / 48 / 88.2 / 96 kHz; 192 kHz with Direct Mode) |
 | Card | SBX effects: master switch and per-effect switches/levels | **Working** |
 | Card | Rear line-out (SABRE9006) | **Working** on the Fedora/alsa-firmware card; silent on the maintainer's card; `AE-9 Output` now switches exclusively |
 | Card | Optical S/PDIF out | Untested |
 | Card | Rear line-in / mic-in | **Working**: ACM mic on capture device 0, rear line-in on device 4, What U Hear loopback on device 2 |
 | Card | Optical S/PDIF in | Untested (exposed as capture device 10) |
 | Card | Mic effects (CrystalVoice) | **Working**: `Enable InFX` + Voice Focus / Noise Reduction / Mic SVM (ON was audibly louder and processed) |
-| Card | Direct Mode / bit-perfect | Not yet; 44.1–96 kHz play through PipeWire without Direct Mode |
+| Card | Direct Mode / rate following | **Working** at 44.1 / 48 / 88.2 / 96 / 192 kHz with `ae9_direct=1` or the `AE-9 Direct Mode` control; the DSP stays in the path. 176.4 / 384 kHz not supported yet |
 | Card | Suspend / resume | **Working** (post-resume unmute hook included) |
 
 ## What works
-- **Headphone output through the ACM** (ES9038Q2M path), 44.1 / 48 / 88.2 / 96 kHz, under PipeWire.
+- **Headphone output through the ACM** (ES9038Q2M path), 44.1 / 48 / 88.2 / 96 / 192 kHz, under PipeWire.
 - **Capture**: the ACM microphone (main-codec capture device 0), the rear line-in
   (secondary-codec capture device 4) and the What U Hear loopback (device 2) work at 48 kHz.
   The installed PipeWire config exposes "Sound Blaster AE-9 Line In" and "Sound Blaster AE-9
@@ -96,9 +96,11 @@ DAC trim and the 48 V phantom still needs a control; see the notes).
   (IEM / Normal / High) is not separately exposed; the module runs at its power-on gain.
   **With sensitive IEMs start at Low** (the defaults set about −25 dB).
 - Effects run at Creative's stock levels, not your Windows SBX profile; there is no import.
-- Bit-perfect / rate following (Windows "Direct Mode") is not implemented: 44.1 / 48 / 88.2 /
-  96 kHz play through PipeWire, but the DSP is still in the loop. 176.4 / 192 kHz are only
-  available on S/PDIF.
+- Direct Mode follows the stream's native rate up to 192 kHz (`ae9_direct=1` or the
+  `AE-9 Direct Mode` control). It re-clocks the DSP/I2S chain, but the DSP remains in the path,
+  so bit-exactness is not proven end to end. 176.4 kHz has no working descriptor on this card
+  and 384 kHz is not implemented (the codec does not advertise it and the HDA link's 8× rate is
+  unproven).
 - Capture works for the ACM microphone, the rear line-in and the What U Hear loopback;
   S/PDIF in is exposed but untested, and the ACM 48 V phantom command is not exposed yet.
   S/PDIF out remains untested; suspend/resume works with the post-resume hook installed by
@@ -290,6 +292,13 @@ a reboot.
 while Headphone is selected; Speakers keeps the line-out live and the ACM amp bit silences the
 headphones. Set it to 0 in `/etc/modprobe.d/sb-ae9.conf` to restore the old behaviour where both
 outputs can be audible.
+
+`ae9_direct=1` (default 0) makes the DSP/I2S chain follow the playback stream's rate
+(44.1 / 48 / 88.2 / 96 / 192 kHz) instead of staying pinned at 96 kHz. The same state is
+exposed as the `AE-9 Direct Mode` mixer control and as the switch on the GUI's Format page, so
+it can be toggled without reloading the module; a change takes effect at the next stream start.
+The analog PCM now always advertises up to 192 kHz; with Direct Mode off the DSP still resamples
+the stream. Enabling Direct Mode in the GUI also switches SBX off.
 
 ### No sound although everything looks right
 Symptom: playback runs (PipeWire stream active, `Master` up, ACM display works) and there is

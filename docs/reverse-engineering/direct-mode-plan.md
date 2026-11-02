@@ -1,6 +1,6 @@
 # Sound Blaster AE-9 — Direct Mode plan
 
-**Status:** living document · 2026-11-03
+**Status:** living document · 2026-11-03 · M0/M1/M2 done, M3 gated
 **Baseline:** `work/ae9-output-switch` / `work/ae9-direct` @ `dc9b50f` (PR #4), GUI `ae9-fx-gui` @ `abbcf73` (PR #1)
 **Purpose:** decide *what* is feasible, *in which order* to build it and *what it costs* — before (more) code.
 
@@ -211,17 +211,19 @@ Verified (physical loopback, 1 kHz tone, capture `hw:Creative,4` @ 48k):
 
 Known limitations: 176.4k unsupported; no explicit DAC mute around the re-clock; `ae9_direct` is a module parameter, not yet a mixer/GUI control.
 
-### M2 — Direct Mode semantics + GUI — **next**
+### M2 — Direct Mode semantics + GUI — **done (core)**
 
-1. Mixer control `AE-9 Direct Mode` (on/off) plus the module parameter, so the GUI can toggle it without a module reload.
-2. When ON:
-   - effects off (SBX/InFX/Scout) and lock the related controls,
-   - SRC/DSP flags per U2 once a Windows capture is available,
-   - stereo-only constraint (Direct Mode is 2ch),
-   - `MASTERCONTROL 0x80/0x00` set to whatever the capture shows.
-3. PipeWire: `install/21-ae9-direct.conf` with a non-resampling path (or `pw-play --target` + `default.clock.allowed-rates`).
-4. GUI (`tools/ae9-fx`): "Direct Mode" switch, current hardware rate display, note that it disables the effects.
-5. README: support matrix and limitations.
+Done:
+1. Mixer control `AE-9 Direct Mode` (boolean) bound to the `ae9_direct` state, plus the module parameter — toggling needs no module reload and applies at the next stream start.
+2. GUI (`tools/ae9-fx`, PR #1): **AE-9 Direct Mode** switch on the Format page, a live **Hardware rate** row read from `/proc/asound/<card>/pcm0p/sub0/hw_params`, and SBX switched off when Direct Mode is enabled.
+3. The analog PCM always advertises 44.1–192 kHz now; the switch only changes whether the chain follows.
+4. README: support matrix, module parameter and GUI notes.
+
+Still open:
+- the driver does not *lock* the effect controls while Direct Mode is on (the GUI only turns SBX off),
+- no stereo-only constraint yet (Direct Mode is a stereo path in Windows),
+- the SRC/DSP flags and `MASTERCONTROL 0x80/0x00` still follow the existing 96 kHz-era values (U2),
+- a true non-resampling PipeWire path: the GUI already manages the graph's allowed rates, but `pw-play --target` / `aplay -D hw:Creative,0` remain the only guaranteed bit-perfect routes.
 
 **Exit:** the user listens at 44.1/48/…/192 without DSP intervention and sees the rate.
 
