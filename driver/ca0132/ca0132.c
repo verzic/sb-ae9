@@ -7081,6 +7081,51 @@ static int ca0132_alt_add_svm_enum(struct hda_codec *codec)
 }
 
 /*
+ * AE-9 Direct Mode switch.
+ *
+ * The module parameter is the state; this control only flips it, so a user
+ * (or the GUI) can turn the rate following on and off without reloading the
+ * module.  It takes effect on the next PCM prepare.
+ */
+static int ae9_direct_ctl_info(struct snd_kcontrol *kcontrol,
+			       struct snd_ctl_elem_info *uinfo)
+{
+	uinfo->type = SNDRV_CTL_ELEM_TYPE_BOOLEAN;
+	uinfo->count = 1;
+	uinfo->value.integer.min = 0;
+	uinfo->value.integer.max = 1;
+	return 0;
+}
+
+static int ae9_direct_ctl_get(struct snd_kcontrol *kcontrol,
+			      struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = ae9_direct ? 1 : 0;
+	return 0;
+}
+
+static int ae9_direct_ctl_put(struct snd_kcontrol *kcontrol,
+			      struct snd_ctl_elem_value *ucontrol)
+{
+	ae9_direct = !!ucontrol->value.integer.value[0];
+	return 0;
+}
+
+static int ae9_add_direct_ctl(struct hda_codec *codec)
+{
+	struct snd_kcontrol_new knew = {
+		.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
+		.name = "AE-9 Direct Mode",
+		.access = SNDRV_CTL_ELEM_ACCESS_READWRITE,
+		.info = ae9_direct_ctl_info,
+		.get = ae9_direct_ctl_get,
+		.put = ae9_direct_ctl_put,
+	};
+
+	return snd_ctl_add(codec->card, snd_ctl_new1(&knew, codec));
+}
+
+/*
  * Create an Output Select enumerated control for codecs with surround
  * out capabilities.
  */
@@ -7485,6 +7530,11 @@ static int ca0132_build_controls(struct hda_codec *codec)
 		err = ca0132_alt_add_output_enum(codec);
 		if (err < 0)
 			return err;
+		if (ca0132_quirk(spec) == QUIRK_AE9) {
+			err = ae9_add_direct_ctl(codec);
+			if (err < 0)
+				return err;
+		}
 		err = ca0132_alt_add_speaker_channel_cfg_enum(codec);
 		if (err < 0)
 			return err;
@@ -7663,10 +7713,12 @@ static int ca0132_build_pcms(struct hda_codec *codec)
 	 * The AE-9's analog converter (NID 0x02) declares only 96 kHz, but the
 	 * DSP/I2S chain has a 192 kHz descriptor (Windows Direct Mode uses it).
 	 * set_pcm_default_values() keeps a non-zero rates mask, so this extends
-	 * the PCM without patching snd-hda-codec. 176.4 kHz is deliberately left
-	 * out: neither candidate rate code produced audio on this card.
+	 * the PCM without patching snd-hda-codec. It is always exposed: with
+	 * AE-9 Direct Mode off the DSP still resamples, but the stream no longer
+	 * needs a module reload when the switch is flipped. 176.4 kHz is
+	 * deliberately left out: neither candidate rate code produced audio.
 	 */
-	if (ae9_direct)
+	if (ca0132_quirk(spec) == QUIRK_AE9)
 		info->stream[SNDRV_PCM_STREAM_PLAYBACK].rates =
 			SNDRV_PCM_RATE_44100 | SNDRV_PCM_RATE_48000 |
 			SNDRV_PCM_RATE_88200 | SNDRV_PCM_RATE_96000 |
