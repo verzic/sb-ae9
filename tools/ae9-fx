@@ -3,8 +3,9 @@
 
 Drives the ALSA mixer elements of the card (id "Creative") through amixer:
 volume and mute, output selection, the SBX effects, the EQ and the DAC filters.
-The Format page reads the running PCM format and manages PipeWire's allowed
-sample rates for the card's analog output.
+The Format page reads the running PCM format, manages PipeWire's allowed
+sample rates for the card's analog output and toggles the driver's Direct
+Mode (native-rate playback at 44.1-192 kHz).
 
 Capture is supported by the driver: the ACM microphone and the rear line-in.
 The Capture page shows the input selector and where the sources appear; the
@@ -214,6 +215,17 @@ def sink_format(node):
             int(rate.group(1)) if rate else None)
 
 
+def hardware_rate():
+    """The rate the analog playback PCM is running at, straight from ALSA."""
+    try:
+        with open(f"/proc/asound/{CARD}/pcm0p/sub0/hw_params",
+                  encoding="utf-8") as fh:
+            m = re.search(r"^rate:\s*(\d+)", fh.read(), re.M)
+            return int(m.group(1)) if m else None
+    except OSError:
+        return None
+
+
 def supported_rates(node):
     """The rates the ALSA node advertises, from its EnumFormat range."""
     out = _pw("enum-params", str(node), "EnumFormat")
@@ -225,8 +237,10 @@ def supported_rates(node):
     if len(vals) < 3:
         return vals
     _default, lo, hi = vals[0], vals[1], vals[2]
-    # the node exposes a min/max range; keep the standard rates inside it
-    return [r for r in (32000, 44100, 48000, 88200, 96000, 176400, 192000)
+    # the node exposes a min/max range; keep the standard rates inside it.
+    # 176.4 kHz is left out: the AE-9's rate-following path has no working
+    # descriptor for it.
+    return [r for r in (32000, 44100, 48000, 88200, 96000, 192000)
             if lo <= r <= hi]
 
 
@@ -643,6 +657,25 @@ class Win(Adw.ApplicationWindow):
         g.add(self.clock_row)
         page.add(g)
 
+        gd = Adw.PreferencesGroup(
+            title="Direct Mode",
+            description="The DSP/I2S chain follows the stream's native rate "
+                        "instead of staying at 96 kHz. Applies at the next "
+                        "stream start; SBX processing is switched off while "
+                        "it is on.")
+        direct_row = self.add_switch(gd, "AE-9 Direct Mode",
+                                     "AE-9 Direct Mode",
+                                     "44.1 / 48 / 88.2 / 96 / 192 kHz")
+        direct_row.connect("notify::active", self.on_direct_mode)
+        self.hw_rate_row = Adw.ActionRow(title="Hardware rate", subtitle="—")
+        gd.add(self.hw_rate_row)
+        self.add_note(
+            gd,
+            "176.4 kHz is not supported by this path and 384 kHz is not "
+            "implemented. With Direct Mode off the DSP resamples the stream "
+            "to 96 kHz.")
+        page.add(gd)
+
         gf = Adw.PreferencesGroup(
             title="Sample format",
             description="Forced on the ALSA sink at the next WirePlumber start. "
@@ -663,7 +696,7 @@ class Win(Adw.ApplicationWindow):
         except (RuntimeError, OSError):
             rates = []
         if not rates:
-            rates = [44100, 48000, 88200, 96000]
+            rates = [44100, 48000, 88200, 96000, 192000]
 
         g2 = Adw.PreferencesGroup(
             title="Allowed sample rates",
@@ -681,8 +714,9 @@ class Win(Adw.ApplicationWindow):
         g3 = Adw.PreferencesGroup(title="Limits")
         self.add_note(
             g3,
-            "The analog PCM of the AE-9 stops at 96 kHz. 176.4/192 kHz are only "
-            "available on the card's S/PDIF output.", "dialog-warning-symbolic")
+            "The analog PCM exposes 44.1-192 kHz. 176.4 kHz is not supported "
+            "and 384 kHz is not implemented yet; the card's S/PDIF output also "
+            "reaches 192 kHz.", "dialog-warning-symbolic")
         self.add_note(
             g3,
             "Allowed rates are a PipeWire graph setting: they apply to every "
@@ -926,7 +960,19 @@ class Win(Adw.ApplicationWindow):
 
     # ── state ─────────────────────────────────────────────────────────────────
 
+    def on_direct_mode(self, row, _param):
+        if self.loading or not row.get_active():
+            return
+        try:
+            if read("Enable OutFX")["switch"]:
+                self.write("Enable OutFX", "off")
+                self.toast("Direct Mode: SBX effects switched off")
+        except (RuntimeError, OSError):
+            pass
+
     def refresh_format(self):
+        r = hardware_rate()
+        self.hw_rate_row.set_subtitle(f"{r} Hz" if r else "idle")
         node = find_sink()
         if node is None:
             self.format_row.set_subtitle("AE-9 sink not found")
