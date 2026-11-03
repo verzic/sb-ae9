@@ -127,6 +127,8 @@ An HDA link sends samples in 48k frames; the standard reaches 4× (192k). 384k n
 
 **If it fails:** stop at 192k. The only fallback is a dedicated DMA/I2S path (architecture C), which is not worth the risk.
 
+**Result (2026-11-03): failed.** The controller accepts the format word — with `rate_bits[]` extended, `SDxFMT` reads back `0x3831` (8x, 24-bit, stereo) while a 384k stream runs — but the link does not carry 8x: the DMA position advances at **48,000 frames/s** (measured over one second at 96k/192k/384k: 96,368 / 192,900 / 48,219 frames), i.e. the multiplier is not honored and the stream effectively runs at 1x. The application is throttled to 48k and the buffer stays full, so no audio at the right rate is possible. This matches the HDA spec, which only defines multipliers 1..4 (up to 192 kHz). 384k over the HDA link is therefore dead; the code change was reverted and the card stays at 192k maximum.
+
 ### U2 — What exactly is Windows' "Direct Mode ON" sequence?
 
 We now know and use the **rate block** (step 8 of I2SM Start). We still do not have a Windows capture that shows:
@@ -228,14 +230,9 @@ Also done in this pass: the analog PCM is constrained to 2 channels while Direct
 
 **Exit:** the user listens at 44.1/48/…/192 without DSP intervention and sees the rate.
 
-### M3 — 384k (gate-dependent) — **blocked on M0b**
+### M3 — 384k — **cancelled (M0b failed)**
 
-1. `hda-core` patch: 384k rate table entry and `snd_hdac_is_supported_format()`.
-2. Driver: 384k entry in `ae9_i2s_rate_set()` (descriptors `0x1f103/0x31002`, GPIO1=1, DAC `0x01=0xc1`, `0x0b |= 0x20`).
-3. If the link needs another frame clock, experiments on BAR2 `0x100` bits 31:29 and the PLL.
-4. 10-minute soak, xruns, temperature, ACM.
-
-**Exit:** L2 done, or a documented "not supported" with evidence.
+M0b showed that the HDA link does not honor the 8x multiplier (SDxFMT `0x3831` is accepted, but the DMA advances at 48k frames/s), so there is no transport for 384k even before the DSP descriptors matter. The experiments were reverted; the card stays at 192 kHz maximum. The remaining theoretical option is architecture C (dedicated DMA/I2S), which stays out of scope.
 
 ### M4 — DSD64 (optional)
 
