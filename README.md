@@ -301,6 +301,12 @@ Enabling it switches the SBX/OutFX and InFX effect masters off and constrains th
 stereo, like the Windows Direct Mode path. The analog PCM always advertises up to 192 kHz; with
 Direct Mode off the DSP still resamples the stream.
 
+### Native-rate playback
+Direct Mode only changes the card side. To keep the whole chain at the file's rate:
+- `aplay -D hw:Creative,0 -f S32_LE -r 96000 -c 2 file.wav` bypasses PipeWire entirely.
+- `pw-play --target <sink>` through PipeWire stays native only if the graph runs at that rate; the GUI's Format page manages `default.clock.allowed-rates`, and the **Hardware rate** row shows what the card is actually running.
+- The default PipeWire graph is 48 kHz; anything else is resampled there before the card sees it.
+
 ### No sound although everything looks right
 Symptom: playback runs (PipeWire stream active, `Master` up, ACM display works) and there is
 silence on the headphones. Check the one line that matters:
