@@ -38,7 +38,7 @@ DAC trim and the 48 V phantom still needs a control; see the notes).
 | Card | Rear line-in / mic-in | **Working**: ACM mic on capture device 0, rear line-in on device 4, What U Hear loopback on device 2 |
 | Card | Optical S/PDIF in | Untested (exposed as capture device 10) |
 | Card | Mic effects (CrystalVoice) | **Working**: `Enable InFX` + Voice Focus / Noise Reduction / Mic SVM (ON was audibly louder and processed) |
-| Card | Direct Mode / rate following | **Working** at 44.1 / 48 / 88.2 / 96 / 192 kHz with `ae9_direct=1` or the `AE-9 Direct Mode` control; the DSP stays in the path. 176.4 / 384 kHz not supported yet |
+| Card | Direct Mode / rate following | **Working** at 44.1 / 48 / 88.2 / 96 / 192 kHz with `ae9_direct=1` or the `AE-9 Direct Mode` control; the DSP stays in the path. 176.4 / 384 kHz not supported (384 kHz was tested: the HDA link does not honor the 8× rate) |
 | Card | Suspend / resume | **Working** (post-resume unmute hook included) |
 
 ## What works
@@ -98,9 +98,10 @@ DAC trim and the 48 V phantom still needs a control; see the notes).
 - Effects run at Creative's stock levels, not your Windows SBX profile; there is no import.
 - Direct Mode follows the stream's native rate up to 192 kHz (`ae9_direct=1` or the
   `AE-9 Direct Mode` control). It re-clocks the DSP/I2S chain, but the DSP remains in the path,
-  so bit-exactness is not proven end to end. 176.4 kHz has no working descriptor on this card
-  and 384 kHz is not implemented (the codec does not advertise it and the HDA link's 8× rate is
-  unproven).
+  so bit-exactness is not proven end to end. 176.4 kHz has no working descriptor on this card.
+  384 kHz was tested (2026-11-03): the controller accepts `SDxFMT=0x3831`, but the HDA link
+  does not carry the 8× rate — the DMA advances at 48k frames/s — so playback cannot run at
+  384 kHz. The card stays at 192 kHz maximum.
 - Capture works for the ACM microphone, the rear line-in and the What U Hear loopback;
   S/PDIF in is exposed but untested, and the ACM 48 V phantom command is not exposed yet.
   S/PDIF out remains untested; suspend/resume works with the post-resume hook installed by
