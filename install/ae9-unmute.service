@@ -1,0 +1,12 @@
+[Unit]
+Description=Unmute the Sound Blaster AE-9 front playback switch after PipeWire starts
+After=pipewire.service wireplumber.service pipewire-pulse.service
+PartOf=pipewire.service wireplumber.service pipewire-pulse.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/sb-ae9/ae9-unmute.sh
+
+[Install]
+WantedBy=pipewire.service

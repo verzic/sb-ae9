@@ -297,8 +297,9 @@ outputs can be audible.
 (44.1 / 48 / 88.2 / 96 / 192 kHz) instead of staying pinned at 96 kHz. The same state is
 exposed as the `AE-9 Direct Mode` mixer control and as the switch on the GUI's Format page, so
 it can be toggled without reloading the module; a change takes effect at the next stream start.
-The analog PCM now always advertises up to 192 kHz; with Direct Mode off the DSP still resamples
-the stream. Enabling Direct Mode in the GUI also switches SBX off.
+Enabling it switches the SBX/OutFX and InFX effect masters off and constrains the analog PCM to
+stereo, like the Windows Direct Mode path. The analog PCM always advertises up to 192 kHz; with
+Direct Mode off the DSP still resamples the stream.
 
 ### No sound although everything looks right
 Symptom: playback runs (PipeWire stream active, `Master` up, ACM display works) and there is
@@ -312,6 +313,18 @@ to the DACs. Seen after Windows sessions and after crashes; a restart or a norma
 does not clear it because the slot stays on standby power. **Remedy: shut down, switch the
 power supply off (or pull the plug), press the power button once to drain, wait 30 s, power
 on.** Confirmed on the reference machine (silent for three days of boots, fixed by one drain).
+
+### Silent after a PipeWire/WirePlumber restart
+WirePlumber's route restore can leave the ALSA **`Front Playback Switch`** off while the sink
+still reports a normal, unmuted volume. Check and fix it:
+```
+amixer -c Creative cget numid=$(amixer -c Creative controls |
+      sed -n "s/^numid=\([0-9]*\).*name='Front Playback Switch'/\1/p")
+amixer -c Creative cset numid=<id> on
+```
+`install.sh` now installs `ae9-unmute.service` (a user unit, `WantedBy=pipewire.service`) which
+re-asserts that switch for a few seconds after the graph starts. If the card is quiet *and* the
+ACM knob drove `Master` down, raise it too (`amixer -c Creative cset numid=14 90`).
 
 After a resume, check `amixer -c Creative sget Front`: WirePlumber's route restore can leave
 the `Front` switch `[off]`, which silences the card even though `Master` is on and the stream

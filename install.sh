@@ -64,9 +64,12 @@ install -D -m 755 "$SRC/install/ae9-defaults.sh" /usr/local/libexec/sb-ae9/ae9-d
 install -D -m 644 "$SRC/install/ae9-defaults.service" "$home/.config/systemd/user/ae9-defaults.service"
 install -D -m 755 "$SRC/install/ae9-resume.sh" /usr/local/libexec/sb-ae9/ae9-resume.sh
 install -D -m 755 "$SRC/install/ae9-resume-sleep" /usr/lib/systemd/system-sleep/50-ae9-resume
+install -D -m 755 "$SRC/install/ae9-unmute.sh" /usr/local/libexec/sb-ae9/ae9-unmute.sh
+install -D -m 644 "$SRC/install/ae9-unmute.service" "$home/.config/systemd/user/ae9-unmute.service"
 chown -R "$usr:" "$home/.config/systemd"
 sudo -u "$usr" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user daemon-reload 2>/dev/null || true
 sudo -u "$usr" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user enable ae9-defaults.service 2>/dev/null || true
+sudo -u "$usr" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user enable ae9-unmute.service 2>/dev/null || true
 
 echo "== 5/5 checks =="
 if [ -d /sys/firmware/efi ] && command -v mokutil >/dev/null && mokutil --sb-state 2>/dev/null | grep -q enabled; then

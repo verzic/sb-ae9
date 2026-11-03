@@ -220,10 +220,11 @@ Done:
 4. README: support matrix, module parameter and GUI notes.
 
 Still open:
-- the driver does not *lock* the effect controls while Direct Mode is on (the GUI only turns SBX off),
-- no stereo-only constraint yet (Direct Mode is a stereo path in Windows),
+- the driver turns the OutFX/InFX masters off when Direct Mode is enabled, but does not hard-lock them (they can be switched back on; the next enable turns them off again),
 - the SRC/DSP flags and `MASTERCONTROL 0x80/0x00` still follow the existing 96 kHz-era values (U2),
 - a true non-resampling PipeWire path: the GUI already manages the graph's allowed rates, but `pw-play --target` / `aplay -D hw:Creative,0` remain the only guaranteed bit-perfect routes.
+
+Also done in this pass: the analog PCM is constrained to 2 channels while Direct Mode is on (Windows' Direct Mode is a stereo path), and `install.sh` installs `ae9-unmute.service`, which re-asserts the `Front Playback Switch` after a PipeWire/WirePlumber restart.
 
 **Exit:** the user listens at 44.1/48/…/192 without DSP intervention and sees the rate.
 

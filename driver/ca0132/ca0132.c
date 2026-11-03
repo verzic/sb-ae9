@@ -4149,6 +4149,19 @@ static void r3di_gpio_dsp_status_set(struct hda_codec *codec,
 static void ae9_dump_dsp_output_state(struct hda_codec *codec, const char *when);
 static void ae9_i2s_rate_set(struct hda_codec *codec, unsigned int rate);
 
+static int ca0132_playback_pcm_open(struct hda_pcm_stream *hinfo,
+				    struct hda_codec *codec,
+				    struct snd_pcm_substream *substream)
+{
+	struct ca0132_spec *spec = codec->spec;
+
+	/* Direct Mode follows the Windows stereo path: no 6-channel stream. */
+	if (ae9_direct && ca0132_quirk(spec) == QUIRK_AE9)
+		return snd_pcm_hw_constraint_minmax(substream->runtime,
+				SNDRV_PCM_HW_PARAM_CHANNELS, 2, 2);
+	return 0;
+}
+
 static int ca0132_playback_pcm_prepare(struct hda_pcm_stream *hinfo,
 			struct hda_codec *codec,
 			unsigned int stream_tag,
@@ -7104,10 +7117,57 @@ static int ae9_direct_ctl_get(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+/*
+ * Force one mixer control to an integer/enum value.  Used to switch the SBX
+ * processors off when Direct Mode is enabled; the control's own put callback
+ * does the DSP work.
+ */
+static void ae9_set_ctl_value(struct hda_codec *codec, const char *name, int val)
+{
+	struct snd_kcontrol *kctl = snd_hda_find_mixer_ctl(codec, name);
+	struct snd_ctl_elem_info info = {};
+	struct snd_ctl_elem_value *uctl;
+
+	if (!kctl || !kctl->put)
+		return;
+	uctl = kzalloc(sizeof(*uctl), GFP_KERNEL);
+	if (!uctl)
+		return;
+	uctl->id = kctl->id;
+	if (kctl->get)
+		kctl->get(kctl, uctl);
+	if (kctl->info) {
+		info.id = kctl->id;
+		kctl->info(kctl, &info);
+		if (info.type == SNDRV_CTL_ELEM_TYPE_ENUMERATED)
+			uctl->value.enumerated.item[0] = val;
+		else
+			uctl->value.integer.value[0] = val;
+	}
+	if (kctl->put(kctl, uctl) >= 0)
+		snd_ctl_notify(codec->card, SNDRV_CTL_EVENT_MASK_VALUE,
+			       &kctl->id);
+	kfree(uctl);
+}
+
+static void ae9_direct_disable_effects(struct hda_codec *codec)
+{
+	ae9_set_ctl_value(codec, "Enable OutFX Playback Switch", 0);
+	ae9_set_ctl_value(codec, "Enable InFX Capture Switch", 0);
+}
+
 static int ae9_direct_ctl_put(struct snd_kcontrol *kcontrol,
 			      struct snd_ctl_elem_value *ucontrol)
 {
-	ae9_direct = !!ucontrol->value.integer.value[0];
+	struct hda_codec *codec = snd_kcontrol_chip(kcontrol);
+	bool on = !!ucontrol->value.integer.value[0];
+
+	/* Direct Mode is the clean path: switch the DSP effects off when it is
+	 * enabled. This is not a hard lock -- the switches can be turned back
+	 * on, but the next enable of Direct Mode turns them off again. */
+	if (on && !ae9_direct)
+		ae9_direct_disable_effects(codec);
+	ae9_direct = on;
 	return 0;
 }
 
@@ -7644,6 +7704,7 @@ static const struct hda_pcm_stream ca0132_pcm_analog_playback = {
 	.channels_min = 2,
 	.channels_max = 6,
 	.ops = {
+		.open = ca0132_playback_pcm_open,
 		.prepare = ca0132_playback_pcm_prepare,
 		.cleanup = ca0132_playback_pcm_cleanup,
 		.get_delay = ca0132_playback_pcm_delay,
